@@ -1,0 +1,101 @@
+{
+  "screenId": "home",
+  "title": "היום שלי",
+  "locale": "he-IL",
+  "direction": "rtl",
+  "designSystem": "00-design-system.json",
+  "source": {
+    "description": "Latest morning home mockup"
+  },
+  "visualReference": {
+    "observed": [
+      "Desk sunrise banner, Luma at upper right, search and alerts at left.",
+      "Latest mockup shows six bottom tabs including team, and differs from approved baseline."
+    ],
+    "exampleDataOnly": true
+  },
+  "layout": {
+    "headerVariant": "home",
+    "scroll": "vertical",
+    "navigation": "shared bottom navigation",
+    "activeTab": "home",
+    "components": [
+      {
+        "id": "greeting",
+        "type": "dynamicGreeting",
+        "sample": "בוקר טוב כרמית"
+      },
+      {
+        "id": "dayContext",
+        "type": "dateLocationStrip",
+        "sample": {
+          "date": "יום שלישי, 28 בינואר",
+          "location": "במשרד"
+        }
+      },
+      {
+        "id": "current",
+        "type": "activityCard",
+        "sample": {
+          "title": "טיפול בפניות",
+          "start": "09:15",
+          "end": "12:00",
+          "remaining": "2:18",
+          "next": "בלוק מייל | 12:00"
+        },
+        "action": "openFocus"
+      },
+      {
+        "id": "metrics",
+        "type": "twoColumnWidgets",
+        "items": [
+          {
+            "label": "מונה פניות",
+            "value": 7,
+            "goal": 10,
+            "action": "openCounter",
+            "quickAction": "+1"
+          },
+          {
+            "label": "התקדמות במשימות היום",
+            "value": 60,
+            "unit": "percent"
+          }
+        ]
+      },
+      {
+        "id": "carryover",
+        "type": "taskList",
+        "title": "משימות שלא הסתיימו עד היום",
+        "required": true,
+        "source": "derived canonical task selector; previous unfinished actionable work only",
+        "actions": [
+          "toggleComplete",
+          "openTask",
+          "reschedule"
+        ]
+      },
+      {
+        "id": "upcoming",
+        "type": "checklist",
+        "title": "משימות קרובות",
+        "items": [
+          "מענה לפניות פתוחות",
+          "השלמת תיעוד במערכת",
+          "הכנה לישיבת צוות",
+          "מעקב אחר פניות שהועברו"
+        ],
+        "actions": [
+          "complete",
+          "reorder",
+          "openTask"
+        ]
+      }
+    ]
+  },
+  "implementationNotes": [
+    "Use 01a-home-approved.json as canonical implementation reference where the latest image conflicts.",
+    "Do not replace handled-inquiry goal with open-inquiry count unless user chooses that optional widget.",
+    "The carried-task list is mandatory, distinct from new tasks, and shares the same task IDs as Tasks. Counts and statuses are computed from live local state."
+  ]
+}

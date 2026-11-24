@@ -1,0 +1,113 @@
+{
+  "screenId": "tasks",
+  "title": "משימות",
+  "locale": "he-IL",
+  "direction": "rtl",
+  "designSystem": "00-design-system.json",
+  "source": {},
+  "visualReference": {
+    "observed": [
+      "Rows have right checkbox, title, date and color-coded priority, left drag handle.",
+      "Image also depicts add-task form open over lower list."
+    ],
+    "exampleDataOnly": true
+  },
+  "layout": {
+    "headerVariant": "secondary",
+    "scroll": "vertical",
+    "navigation": "shared bottom navigation",
+    "activeTab": "tasks",
+    "components": [
+      {
+        "id": "filter",
+        "type": "segmentedControl",
+        "options": [
+          "היום",
+          "השבוע",
+          "הושלם"
+        ],
+        "default": "היום"
+      },
+      {
+        "id": "carryover",
+        "type": "taskList",
+        "title": "משימות שלא הסתיימו עד היום",
+        "required": true,
+        "visibleIn": "today",
+        "source": "same derived task selector as Home",
+        "actions": [
+          "toggleComplete",
+          "edit",
+          "reschedule"
+        ]
+      },
+      {
+        "id": "today",
+        "type": "taskList",
+        "title": "משימות להיום",
+        "sample": [
+          {
+            "title": "להכין חומר לישיבת צוות",
+            "priority": "high",
+            "due": "היום"
+          },
+          {
+            "title": "לענות על פניות פתוחות",
+            "priority": "medium",
+            "due": "היום"
+          },
+          {
+            "title": "לעדכן סטטוס מסמכים",
+            "priority": "low",
+            "due": "היום"
+          }
+        ],
+        "actions": [
+          "toggleComplete",
+          "reorder",
+          "edit"
+        ]
+      },
+      {
+        "id": "week",
+        "type": "taskList",
+        "title": "משימות השבוע",
+        "sample": [
+          {
+            "title": "להשלים בדיקות QA",
+            "priority": "high",
+            "due": "30 בינואר"
+          },
+          {
+            "title": "לרכז שאלות לישיבה",
+            "priority": "medium",
+            "due": "31 בינואר"
+          }
+        ]
+      },
+      {
+        "id": "add",
+        "type": "floatingAction",
+        "icon": "plus",
+        "action": "openAddTask"
+      },
+      {
+        "id": "groups",
+        "type": "additionalFilters",
+        "options": [
+          "לא הסתיימו",
+          "עתידיות",
+          "ממתינות לתשובה",
+          "נדחו",
+          "הושלמו"
+        ]
+      }
+    ]
+  },
+  "implementationNotes": [
+    "Treat the form as a separate transient sheet, not a permanent widget. See 07-add-task.json.",
+    "QA example is illustrative and may be unrelated to Carmit; replace with actual work records.",
+    "Unfinished tasks roll to next workday; retain original due date separately.",
+    "Keep unfinished earlier work in its own mandatory section, not mixed with new tasks or represented as duplicate records."
+  ]
+}

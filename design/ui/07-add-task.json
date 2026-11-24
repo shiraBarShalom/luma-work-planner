@@ -1,0 +1,76 @@
+{
+  "screenId": "add-task",
+  "title": "הוספת משימה",
+  "locale": "he-IL",
+  "direction": "rtl",
+  "designSystem": "00-design-system.json",
+  "source": {
+    "description": "Modal region of task mockup"
+  },
+  "visualReference": {
+    "observed": [
+      "The reference shows a rounded white modal, X left, title right, one text field, two selectors and blue submit button."
+    ],
+    "exampleDataOnly": true
+  },
+  "layout": {
+    "headerVariant": "secondary",
+    "scroll": "vertical",
+    "navigation": "shared bottom navigation",
+    "activeTab": "tasks",
+    "components": [
+      {
+        "id": "sheet",
+        "type": "bottomSheet",
+        "title": "הוספת משימה",
+        "fields": [
+          {
+            "key": "title",
+            "type": "text",
+            "label": "תיאור המשימה",
+            "required": true
+          },
+          {
+            "key": "priority",
+            "type": "select",
+            "label": "עדיפות",
+            "options": [
+              "גבוהה",
+              "בינונית",
+              "נמוכה"
+            ]
+          },
+          {
+            "key": "dueDate",
+            "type": "date",
+            "label": "תאריך יעד",
+            "required": false
+          }
+        ],
+        "primaryAction": {
+          "label": "הוסף משימה",
+          "action": "saveTask"
+        },
+        "secondaryAction": {
+          "icon": "x",
+          "action": "close"
+        }
+      },
+      {
+        "id": "details",
+        "type": "optionalExpandedFields",
+        "fields": [
+          "category",
+          "executionDate",
+          "estimatedDuration",
+          "notes",
+          "subtasks"
+        ]
+      }
+    ]
+  },
+  "implementationNotes": [
+    "Advanced fields come from the original brief, not visible in the modal.",
+    "Validate required title, preserve draft on accidental dismissal where possible; editing uses same form with populated values."
+  ]
+}

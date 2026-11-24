@@ -1,0 +1,84 @@
+{
+  "screenId": "questions",
+  "title": "שאלות ממתינות",
+  "locale": "he-IL",
+  "direction": "rtl",
+  "designSystem": "00-design-system.json",
+  "source": {},
+  "visualReference": {
+    "observed": [
+      "Four white cards with question icon on right, status/date/source labels, checkbox and chevron on left.",
+      "Reference replaces tasks tab with questions."
+    ],
+    "exampleDataOnly": true
+  },
+  "layout": {
+    "headerVariant": "secondary",
+    "scroll": "vertical",
+    "navigation": "shared bottom navigation",
+    "activeTab": null,
+    "components": [
+      {
+        "id": "add",
+        "type": "primaryButton",
+        "label": "הוספת שאלה",
+        "action": "openQuestionSheet"
+      },
+      {
+        "id": "filters",
+        "type": "segmentedControl",
+        "options": [
+          "הכול",
+          "לישיבה",
+          "בטיפול",
+          "טופל"
+        ],
+        "default": "הכול"
+      },
+      {
+        "id": "questions",
+        "type": "expandableQuestionList",
+        "sample": [
+          {
+            "title": "איך מתקדמים עם שיפור דיוק הזיהוי?",
+            "date": "21 בנוב׳",
+            "source": "לישיבת צוות",
+            "status": "new"
+          },
+          {
+            "title": "האם נדרש עדכון במדיניות ההשחרות?",
+            "date": "20 בנוב׳",
+            "source": "יוזמה שלי",
+            "status": "meeting"
+          },
+          {
+            "title": "האם ניתן להגדיל את מספר ה-Workers?",
+            "date": "18 בנוב׳",
+            "source": "ישיבת צוות",
+            "status": "inProgress"
+          },
+          {
+            "title": "מהו התהליך במקרה של מסמך מלא חסוי?",
+            "date": "17 בנוב׳",
+            "source": "מעבודה שוטפת",
+            "status": "resolved"
+          }
+        ],
+        "actions": [
+          "expand",
+          "edit",
+          "recordAnswer",
+          "assignMeeting",
+          "resolve",
+          "reopen"
+        ]
+      }
+    ]
+  },
+  "implementationNotes": [
+    "Use same shared navigation.",
+    "Questions list and team screen use the same data, not duplicated records.",
+    "Replace technical example questions with actual work questions; examples are visual only.",
+    "Do not equate a checkbox with resolution when status remains in progress."
+  ]
+}

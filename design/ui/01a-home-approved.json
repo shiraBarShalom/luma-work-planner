@@ -1,0 +1,132 @@
+{
+  "screenId": "home-approved",
+  "title": "היום שלי",
+  "locale": "he-IL",
+  "direction": "rtl",
+  "designSystem": "00-design-system.json",
+  "source": {
+    "description": "User-approved home mockup, no wave under greeting"
+  },
+  "visualReference": {
+    "observed": [
+      "Small upper-right Luma wordmark, greeting below without underline.",
+      "Timer and inquiry ring, horizontal day progress, three priority tasks and five shortcut tiles."
+    ],
+    "exampleDataOnly": true
+  },
+  "layout": {
+    "headerVariant": "home",
+    "scroll": "vertical",
+    "navigation": "shared bottom navigation",
+    "activeTab": "home",
+    "components": [
+      {
+        "id": "greeting",
+        "type": "dynamicGreeting",
+        "sample": "ערב טוב, כרמית"
+      },
+      {
+        "id": "dayContext",
+        "type": "dateLocationStrip",
+        "sample": {
+          "date": "יום שלישי, 28 בינואר",
+          "location": "במשרד"
+        },
+        "additional": "show duty when active"
+      },
+      {
+        "id": "current",
+        "type": "activityCard",
+        "sample": {
+          "title": "טיפול בפניות",
+          "start": "09:15",
+          "end": "12:00",
+          "remaining": "2:18",
+          "next": "בלוק מייל | 12:00"
+        },
+        "action": "openFocus"
+      },
+      {
+        "id": "widgets",
+        "type": "twoColumnWidgets",
+        "items": [
+          {
+            "id": "inquiries",
+            "label": "מונה פניות",
+            "value": 7,
+            "goal": 10,
+            "action": "openCounter",
+            "quickAction": "+1"
+          },
+          {
+            "id": "workday",
+            "label": "התקדמות יום העבודה",
+            "value": 42,
+            "unit": "percent"
+          }
+        ]
+      },
+      {
+        "id": "priorities",
+        "type": "checklist",
+        "title": "3 המשימות החשובות היום",
+        "items": [
+          "להשלים את דוח החודש",
+          "להכין שאלות לישיבת צוות",
+          "מענה לפניות פתוחות"
+        ],
+        "actions": [
+          "complete",
+          "reorder",
+          "openTask"
+        ]
+      },
+      {
+        "id": "carryover",
+        "type": "taskList",
+        "title": "משימות שלא הסתיימו עד היום",
+        "required": true,
+        "source": "derived canonical task selector; previous unfinished actionable work only",
+        "actions": [
+          "toggleComplete",
+          "openTask",
+          "reschedule"
+        ]
+      },
+      {
+        "id": "shortcuts",
+        "type": "quickActions",
+        "items": [
+          {
+            "label": "פנייה טופלה",
+            "action": "incrementCounter"
+          },
+          {
+            "label": "הוספת משימה",
+            "action": "openAddTask"
+          },
+          {
+            "label": "פגישות",
+            "action": "openMeetings",
+            "exampleCount": 2
+          },
+          {
+            "label": "שאלות",
+            "action": "openQuestions",
+            "exampleCount": 3
+          },
+          {
+            "label": "סיכומים",
+            "action": "openReports"
+          }
+        ]
+      }
+    ]
+  },
+  "implementationNotes": [
+    "Canonical home layout.",
+    "Add optional widgets for next-hour tasks, meetings, unanswered questions and closing day without making all mandatory.",
+    "Mockup greeting and activity time are inconsistent sample data, not a rule.",
+    "The carried-task list is mandatory, distinct from new tasks, and shares the same task IDs as Tasks. Counts and statuses are computed from live local state."
+  ]
+}

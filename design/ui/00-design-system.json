@@ -1,0 +1,202 @@
+{
+  "product": "Luma",
+  "version": "0.1",
+  "documentType": "proposed_ui_specification",
+  "locale": "he-IL",
+  "direction": "rtl",
+  "platform": "mobile-first iPhone-style responsive interface",
+  "source": "User-approved home mockup without decorative greeting underline; six subsequent generated screen references.",
+  "tokens": {
+    "color": {
+      "light": {
+        "background": "#F4F0EF",
+        "surface": "#FAF7F5",
+        "surfaceCool": "#E5EDF7",
+        "text": "#102746",
+        "mutedText": "#526273",
+        "primary": "#286C96",
+        "primarySoft": "#D2E5F4",
+        "border": "#E5E4E7",
+        "success": "#34745D",
+        "warning": "#9A620E",
+        "danger": "#A92B32",
+        "champagne": "#F0D9B8"
+      },
+      "dark": {
+        "background": "#121C29",
+        "surface": "#1C2938",
+        "surfaceCool": "#23394C",
+        "text": "#F1F5FA",
+        "mutedText": "#B4C2D1",
+        "primary": "#92C5E5",
+        "primarySoft": "#29465B",
+        "border": "#36485A",
+        "success": "#94D3B5",
+        "warning": "#F2CD8B",
+        "danger": "#FFB3B6",
+        "champagne": "#E7C9A2"
+      }
+    },
+    "typography": {
+      "hebrewFontCandidate": "Noto Sans Hebrew",
+      "fallback": [
+        "Arial",
+        "sans-serif"
+      ],
+      "brand": "Small Luma text wordmark until a dedicated transparent wordmark asset is supplied; do not use the square app icon as a wide wordmark.",
+      "sizesPx": {
+        "greeting": 26,
+        "pageTitle": 26,
+        "sectionTitle": 19,
+        "body": 16,
+        "secondary": 13,
+        "navigation": 12,
+        "metric": 28
+      },
+      "weights": {
+        "regular": 400,
+        "medium": 500,
+        "semibold": 600,
+        "bold": 700
+      },
+      "numbers": "tabular numerals; isolate numeric times and ratios in LTR spans"
+    },
+    "spacingPx": [
+      4,
+      8,
+      12,
+      16,
+      20,
+      24,
+      32
+    ],
+    "radiusPx": {
+      "card": 16,
+      "button": 14,
+      "pill": 999,
+      "sheet": 24
+    },
+    "shadow": {
+      "card": "0 3px 12px rgba(16,39,70,0.06)"
+    },
+    "minimumTouchTargetPx": 44,
+    "referenceViewportCssPx": {
+      "width": 390,
+      "height": 844
+    }
+  },
+  "components": {
+    "header": {
+      "home": "edge-to-edge desk/window photo with small wordmark upper right, dynamic greeting below, search and notification controls left",
+      "secondary": "shorter photo header with page title; no large greeting",
+      "wordmarkWidthPx": 88,
+      "homeHeightPx": 190,
+      "secondaryHeightPx": 108,
+      "respectSafeArea": true,
+      "noDecorativeUnderline": true,
+      "imageTextSeparation": true,
+      "imageAssets": {
+        "dawn": "../assets/banner-dawn.webp",
+        "day": "../assets/banner-day.webp",
+        "sunset": "../assets/banner-sunset.webp",
+        "night": "../assets/banner-night.webp"
+      },
+      "timeRulesProposal": [
+        {
+          "from": "05:00",
+          "to": "08:00",
+          "image": "dawn",
+          "greeting": "בוקר טוב, כרמית"
+        },
+        {
+          "from": "08:00",
+          "to": "12:00",
+          "image": "day",
+          "greeting": "בוקר טוב, כרמית"
+        },
+        {
+          "from": "12:00",
+          "to": "17:00",
+          "image": "day",
+          "greeting": "צהריים טובים, כרמית"
+        },
+        {
+          "from": "17:00",
+          "to": "20:00",
+          "image": "sunset",
+          "greeting": "ערב טוב, כרמית"
+        },
+        {
+          "from": "20:00",
+          "to": "05:00",
+          "image": "night",
+          "greeting": "לילה טוב, כרמית"
+        }
+      ],
+      "timeZone": "Asia/Jerusalem; fixed illustrative intervals, configurable; recompute at open/resume and boundaries while visible",
+      "nightText": "light foreground or contrast scrim",
+      "wordmarkAsset": "No standalone wordmark supplied; use an accessible restrained live Luma text wordmark until artwork is provided."
+    },
+    "bottomNav": {
+      "itemsRightToLeft": [
+        {
+          "id": "home",
+          "label": "היום שלי",
+          "icon": "house"
+        },
+        {
+          "id": "agenda",
+          "label": "סדר היום",
+          "icon": "list"
+        },
+        {
+          "id": "tasks",
+          "label": "משימות",
+          "icon": "square-check"
+        },
+        {
+          "id": "calendar",
+          "label": "יומן",
+          "icon": "calendar"
+        },
+        {
+          "id": "settings",
+          "label": "הגדרות",
+          "icon": "settings"
+        }
+      ],
+      "fixed": true,
+      "safeArea": true,
+      "activeStyle": "soft blue rounded background, darker filled icon",
+      "secondaryRoutes": "Keep order consistent; team/questions/counter/reports/work tools through home shortcuts and secondary routes."
+    },
+    "buttons": {
+      "primary": "solid muted blue, white text in light mode",
+      "secondary": "neutral background or simple outline",
+      "avoid": "heavy gradients, excessive shadows, decorative graphics"
+    },
+    "lists": {
+      "alignment": "RTL, right-side checkbox or icon, left-side overflow or drag handle",
+      "rowMinHeightPx": 48,
+      "separators": "subtle"
+    },
+    "sheet": {
+      "presentation": "bottom sheet with dimmed background, swipe dismissal, explicit close, keyboard-safe",
+      "primaryAction": "sticky above safe area"
+    },
+    "motion": {
+      "durationMs": 180,
+      "bannerCrossfadeMs": 350,
+      "reducedMotion": "respect system preference"
+    }
+  },
+  "implementationNotes": [
+    "All token values, typeface, dimensions and time boundaries are proposed, not measurements from raster images.",
+    "Never render phone bezel, fake iOS clock, or status icons as app content.",
+    "Use actual calendar dates, live activity times and persisted records.",
+    "Keep work-only content; no projects or personal goals.",
+    "No claim that the design has been implemented or accessibility-tested.",
+    "Dark palette is proposed; no dark mockup was supplied.",
+    "Architecture governs all behavior. Implement all required screens, including those without standalone visual references. No sample records in production."
+  ]
+}

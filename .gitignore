@@ -1,0 +1,16 @@
+# Dependencies and local tooling output
+node_modules/
+test-results/
+playwright-report/
+.tmp/
+
+# Personal data and backups must never be committed
+*.backup.json
+luma-backup-*.json
+luma-work-backup-*.json
+private/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/

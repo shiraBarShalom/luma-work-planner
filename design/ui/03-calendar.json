@@ -1,0 +1,92 @@
+{
+  "screenId": "calendar",
+  "title": "יומן",
+  "locale": "he-IL",
+  "direction": "rtl",
+  "designSystem": "00-design-system.json",
+  "source": {},
+  "visualReference": {
+    "observed": [
+      "Monthly grid with dark blue selected circle and small blue event dots; event cards below.",
+      "Reference grid duplicates 28 and misplaces dates.",
+      "Only month mode pictured."
+    ],
+    "exampleDataOnly": true
+  },
+  "layout": {
+    "headerVariant": "secondary",
+    "scroll": "vertical",
+    "navigation": "shared bottom navigation",
+    "activeTab": "calendar",
+    "components": [
+      {
+        "id": "views",
+        "type": "segmentedControl",
+        "options": [
+          "חודש",
+          "שבוע",
+          "יום"
+        ],
+        "default": "חודש"
+      },
+      {
+        "id": "month",
+        "type": "monthGrid",
+        "weekStartsOn": "Sunday",
+        "columnsRightToLeft": [
+          "א",
+          "ב",
+          "ג",
+          "ד",
+          "ה",
+          "ו",
+          "ש"
+        ],
+        "sampleMonth": "2026-01",
+        "actions": [
+          "previousPeriod",
+          "nextPeriod",
+          "selectDay"
+        ],
+        "markers": [
+          "meeting",
+          "dayOff",
+          "remote",
+          "deadline",
+          "duty"
+        ]
+      },
+      {
+        "id": "selectedDay",
+        "type": "eventList",
+        "sample": [
+          {
+            "title": "טיפול בפניות",
+            "start": "09:15",
+            "end": "12:00"
+          },
+          {
+            "title": "בלוק מיילים",
+            "start": "12:00",
+            "end": "12:30"
+          },
+          {
+            "title": "ישיבת צוות",
+            "start": "14:00",
+            "end": "15:00"
+          }
+        ]
+      },
+      {
+        "id": "add",
+        "type": "primaryButton",
+        "label": "הוספת אירוע",
+        "action": "openEventSheet"
+      }
+    ]
+  },
+  "implementationNotes": [
+    "Compute real calendar dates; never copy grid numerals or sample times as schedule defaults.",
+    "Weekly view: hourly grid with drag between days and hours; daily view: agenda for selected date. These are brief-derived, not pictured."
+  ]
+}

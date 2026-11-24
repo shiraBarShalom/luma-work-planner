@@ -1,0 +1,59 @@
+{
+  "description": "Actual packaged asset paths relative to design/ui/. Original supplied JPEGs preserved; WebP banner derivatives included.",
+  "assets": [
+    {
+      "role": "luma-app-icon-reference",
+      "original": "../assets/originals/luma-app-icon-reference.jpg",
+      "runtimeFile": null,
+      "width": 1254,
+      "height": 1254,
+      "use": "source artwork for production app icons; not a final icon"
+    },
+    {
+      "role": "banner-night",
+      "original": "../assets/originals/banner-night.jpg",
+      "runtimeFile": "../assets/banner-night.webp",
+      "width": 1536,
+      "height": 512,
+      "use": "local time-of-day banner"
+    },
+    {
+      "role": "banner-day",
+      "original": "../assets/originals/banner-day.jpg",
+      "runtimeFile": "../assets/banner-day.webp",
+      "width": 1536,
+      "height": 512,
+      "use": "local time-of-day banner"
+    },
+    {
+      "role": "banner-dawn",
+      "original": "../assets/originals/banner-dawn.jpg",
+      "runtimeFile": "../assets/banner-dawn.webp",
+      "width": 1536,
+      "height": 512,
+      "use": "local time-of-day banner"
+    },
+    {
+      "role": "banner-sunset",
+      "original": "../assets/originals/banner-sunset.jpg",
+      "runtimeFile": "../assets/banner-sunset.webp",
+      "width": 1536,
+      "height": 512,
+      "use": "local time-of-day banner"
+    },
+    {
+      "role": "banner-dawn-alternate",
+      "original": "../assets/originals/banner-dawn-alternate.jpg",
+      "runtimeFile": "../assets/banner-dawn-alternate.webp",
+      "width": 1536,
+      "height": 512,
+      "use": "optional alternate dawn reference"
+    }
+  ],
+  "notes": [
+    "Dawn/sunset assignment is a visual interpretation of the three warm-light variants; alternate dawn is optional.",
+    "Only the square L monogram icon was supplied. A separate transparent sunrise wordmark is not available. Use live Luma text until supplied.",
+    "Generate production app icons from the supplied reference without the surrounding mockup margin; verify sizes and maskable safe area.",
+    "Precache the active local banner files, runtime icons and any licensed local fonts."
+  ]
+}

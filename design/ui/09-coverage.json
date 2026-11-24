@@ -1,0 +1,25 @@
+{
+  "canonicalHome": "01a-home-approved.json",
+  "latestMockups": [
+    "01-home.json",
+    "02-agenda.json",
+    "03-calendar.json",
+    "04-tasks.json",
+    "05-team-meetings.json",
+    "06-pending-questions.json"
+  ],
+  "additionalModal": "07-add-task.json",
+  "notYetIndividuallyMocked": [
+    "inquiryCounter",
+    "statistics",
+    "settings",
+    "focusMode",
+    "endOfDay",
+    "planningImport",
+    "exportAndSharing",
+    "calendarWeek",
+    "calendarDay",
+    "workTools"
+  ],
+  "note": "These screens were requested earlier but are not among the six latest standalone images. No invented screenshot specifications are represented as observed."
+}
