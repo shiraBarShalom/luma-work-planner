@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "luma-work-plan.v1.schema.json",
+  "title": "Luma work plan (luma-work-plan) v1",
+  "description": "Structured planning patch produced externally (e.g. by ChatGPT) and imported locally after preview and approval. Unknown optional values are omitted or null (null = unknown, never deletion or zero). No deletion, completion, counts or commands. Limits: 1 MiB, 500 items. Semantic rules (date ranges, end>start, end/duration agreement, references, known categories) are enforced by js/data/importPlan.js.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "schemaVersion", "kind", "planId"],
+  "properties": {
+    "format": { "const": "luma-work-plan" },
+    "schemaVersion": { "const": 1 },
+    "kind": { "enum": ["weekly", "dailyPatch"] },
+    "planId": { "$ref": "#/$defs/id" },
+    "weekStart": { "anyOf": [{ "$ref": "#/$defs/date" }, { "type": "null" }], "description": "Sunday ISO date; required when kind = weekly" },
+    "days": { "type": "array", "items": { "$ref": "#/$defs/days" } },
+    "blocks": { "type": "array", "items": { "$ref": "#/$defs/blocks" } },
+    "meetings": { "type": "array", "items": { "$ref": "#/$defs/meetings" } },
+    "tasks": { "type": "array", "items": { "$ref": "#/$defs/tasks" } },
+    "questions": { "type": "array", "items": { "$ref": "#/$defs/questions" } }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N}._:-]{0,99}$" },
+    "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "time": { "type": "string", "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$" },
+    "role": { "enum": ["opening", "inquiries", "email1", "break", "teamReception", "followup", "email2", "closing"] },
+    "priority": { "enum": ["high", "medium", "low"] },
+    "days": {
+      "type": "object", "additionalProperties": false, "required": ["externalId", "date"],
+      "properties": {
+        "externalId": { "$ref": "#/$defs/id" },
+        "date": { "$ref": "#/$defs/date" },
+        "isWorking": { "type": ["boolean", "null"] },
+        "location": { "enum": ["office", "home", "other", null] },
+        "phoneDuty": { "type": ["boolean", "null"] },
+        "phoneStart": { "anyOf": [{ "$ref": "#/$defs/time" }, { "type": "null" }] },
+        "phoneEnd": { "anyOf": [{ "$ref": "#/$defs/time" }, { "type": "null" }] },
+        "workStart": { "anyOf": [{ "$ref": "#/$defs/time" }, { "type": "null" }] },
+        "workEnd": { "anyOf": [{ "$ref": "#/$defs/time" }, { "type": "null" }] },
+        "inquiryTarget": { "type": ["integer", "null"], "minimum": 0, "maximum": 200 },
+        "templateId": { "type": ["string", "null"], "maxLength": 80 }
+      }
+    },
+    "blocks": {
+      "type": "object", "additionalProperties": false, "required": ["externalId", "date", "title"],
+      "properties": {
+        "externalId": { "$ref": "#/$defs/id" },
+        "date": { "$ref": "#/$defs/date" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "start": { "anyOf": [{ "$ref": "#/$defs/time" }, { "type": "null" }] },
+        "end": { "anyOf": [{ "$ref": "#/$defs/time" }, { "type": "null" }] },
+        "durationMinutes": { "type": ["integer", "null"], "minimum": 1, "maximum": 720 },
+        "categoryId": { "type": ["string", "null"], "maxLength": 60 },
+        "role": { "anyOf": [{ "$ref": "#/$defs/role" }, { "type": "null" }] },
+        "notes": { "type": ["string", "null"], "maxLength": 2000 },
+        "pinned": { "type": ["boolean", "null"] },
+        "taskRefs": { "type": ["array", "null"], "items": { "$ref": "#/$defs/id" }, "maxItems": 100 }
+      }
+    },
+    "meetings": {
+      "type": "object", "additionalProperties": false, "required": ["externalId", "title", "meetingType"],
+      "properties": {
+        "externalId": { "$ref": "#/$defs/id" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "meetingType": { "enum": ["team", "manager", "other"] },
+        "date": { "anyOf": [{ "$ref": "#/$defs/date" }, { "type": "null" }] },
+        "start": { "anyOf": [{ "$ref": "#/$defs/time" }, { "type": "null" }] },
+        "end": { "anyOf": [{ "$ref": "#/$defs/time" }, { "type": "null" }] },
+        "durationMinutes": { "type": ["integer", "null"], "minimum": 1, "maximum": 720 },
+        "agendaRefs": { "type": ["array", "null"], "items": { "$ref": "#/$defs/id" }, "maxItems": 100 },
+        "notes": { "type": ["string", "null"], "maxLength": 2000 }
+      }
+    },
+    "tasks": {
+      "type": "object", "additionalProperties": false, "required": ["externalId", "title"],
+      "properties": {
+        "externalId": { "$ref": "#/$defs/id" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "scheduledDate": { "anyOf": [{ "$ref": "#/$defs/date" }, { "type": "null" }] },
+        "deadline": { "anyOf": [{ "$ref": "#/$defs/date" }, { "type": "null" }] },
+        "priority": { "anyOf": [{ "$ref": "#/$defs/priority" }, { "type": "null" }] },
+        "categoryId": { "type": ["string", "null"], "maxLength": 60 },
+        "estimateMinutes": { "type": ["integer", "null"], "minimum": 1, "maximum": 1440 },
+        "subtasks": { "type": ["array", "null"], "items": { "type": "string", "minLength": 1, "maxLength": 300 }, "maxItems": 50 },
+        "notes": { "type": ["string", "null"], "maxLength": 2000 },
+        "preferredRole": { "anyOf": [{ "$ref": "#/$defs/role" }, { "type": "null" }] }
+      }
+    },
+    "questions": {
+      "type": "object", "additionalProperties": false, "required": ["externalId", "title", "audience"],
+      "properties": {
+        "externalId": { "$ref": "#/$defs/id" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "audience": { "enum": ["team", "manager"] },
+        "direction": { "enum": ["incoming", "outgoing", null] },
+        "priority": { "anyOf": [{ "$ref": "#/$defs/priority" }, { "type": "null" }] },
+        "followUpOn": { "anyOf": [{ "$ref": "#/$defs/date" }, { "type": "null" }] },
+        "notes": { "type": ["string", "null"], "maxLength": 2000 },
+        "meetingRef": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] }
+      }
+    }
+  }
+}

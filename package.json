@@ -1,0 +1,17 @@
+{
+  "name": "luma-work-planner",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Luma (לומה) – Hebrew, RTL, offline-first personal work planner PWA. No build step; dev dependencies are for tests only.",
+  "type": "module",
+  "scripts": {
+    "start": "node tools/serve.mjs",
+    "test": "node --test \"tests/unit/*.test.js\" \"tests/integration/*.test.js\"",
+    "test:browser": "node tests/browser/run.mjs",
+    "test:all": "npm run check && npm test && npm run test:browser",
+    "check": "node tools/check-shell.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.65.1"
+  }
+}

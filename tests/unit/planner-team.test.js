@@ -1,0 +1,126 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { makeStore, must } from '../helpers.js';
+import { proposePlan, proposeDelay, firstFreeSlot } from '../../js/engine/planner.js';
+import { dayOccurrences } from '../../js/engine/schedule.js';
+import { agendaQueue, upcomingMeetings, faqCandidates } from '../../js/engine/team.js';
+import { computeAlerts } from '../../js/engine/conflicts.js';
+import { globalSearch } from '../../js/engine/search.js';
+import { waitingCenter } from '../../js/engine/workTools.js';
+import { closingSummary } from '../../js/engine/dayClosing.js';
+import { periodReport } from '../../js/engine/statistics.js';
+
+const MON = '2026-11-30';
+const now = { date: MON, minute: 9 * 60 };
+
+test('planner: preview never mutates, respects roles, capacity, missing estimates and manual assignments', async () => {
+  const { store } = await makeStore({ date: MON, minute: 540 });
+  const a = await must(store.dispatch('addTask', { title: 'מסמך', scheduledDate: MON, categoryId: 'documents', estimateMinutes: 60, priority: 'high' }));
+  const b = await must(store.dispatch('addTask', { title: 'CRM', scheduledDate: MON, categoryId: 'crm' }));
+  const c = await must(store.dispatch('addTask', { title: 'ענק', scheduledDate: MON, categoryId: 'documents', estimateMinutes: 600, deadline: MON }));
+  const d = await must(store.dispatch('addTask', { title: 'ידני', scheduledDate: MON, categoryId: 'documents', estimateMinutes: 15 }));
+  const manualOcc = dayOccurrences(store.state, MON).find((o) => o.role === 'closing');
+  await must(store.dispatch('assignTaskToBlock', { taskId: d, occId: manualOcc.id }));
+  const rev = store.state.metadata.revision;
+  const p = proposePlan(store.state, { now, dates: [MON] });
+  assert.equal(store.state.metadata.revision, rev, 'no state change');
+  const byTask = Object.fromEntries(p.assignments.map((x) => [x.taskId, x]));
+  assert.equal(dayOccurrences(store.state, MON).find((o) => o.id === byTask[a].occId).role, 'followup');
+  assert.equal(byTask[b].assumed, true, 'missing estimate flagged as assumption');
+  assert.ok(['email1', 'email2'].includes(dayOccurrences(store.state, MON).find((o) => o.id === byTask[b].occId).role));
+  assert.ok(p.unallocated.some((u) => u.taskId === c), 'unallocated work reported');
+  assert.ok(p.conflicts.some((x) => x.taskId === c && x.type === 'deadline'));
+  assert.ok(!byTask[d], 'manual assignment preserved');
+  const again = proposePlan(store.state, { now, dates: [MON] });
+  assert.deepEqual(again.assignments.map((x) => x.taskId + x.occId), p.assignments.map((x) => x.taskId + x.occId), 'deterministic');
+  await must(store.dispatch('applyPlannerAssignments', { assignments: [byTask[a]] }));
+  assert.equal(store.state.tasks.find((t) => t.id === a).assignedBlock, byTask[a].occId);
+  await store.undo();
+  assert.equal(store.state.tasks.find((t) => t.id === a).assignedBlock, null, 'undoable');
+  const slot = firstFreeSlot(store.state, a, now);
+  assert.ok(slot.assignment);
+});
+
+test('planner: waiting tasks only when follow-up due; short day reduces capacity', async () => {
+  const { store } = await makeStore({ date: MON });
+  const w = await must(store.dispatch('addTask', { title: 'ממתין', scheduledDate: MON, estimateMinutes: 10 }));
+  await must(store.dispatch('setTaskStatus', { id: w, status: 'waiting', followUpOn: '2026-12-10' }));
+  assert.ok(!proposePlan(store.state, { now, dates: [MON] }).assignments.some((x) => x.taskId === w));
+  await must(store.dispatch('setDayOverride', { date: MON, patch: { workEnd: '13:00' } }));
+  const cap = proposePlan(store.state, { now, dates: [MON] }).capacity;
+  assert.ok(cap.every((s) => s.end <= '13:00'));
+});
+
+test('delay handling: shift never moves fixed meeting/break or extends the day', async () => {
+  const { store } = await makeStore({ date: MON });
+  await must(store.dispatch('addMeeting', { title: 'פגישה', meetingType: 'manager', date: MON, start: '14:15', end: '14:45', confirm: true }));
+  const inq = dayOccurrences(store.state, MON).find((o) => o.role === 'inquiries');
+  const p = proposeDelay(store.state, MON, inq.id, 45, 'shift');
+  assert.ok(!p.changes.some((c) => c.title === 'הפסקה' || c.title === 'פגישה'));
+  assert.ok(p.changes.every((c) => c.after[1] <= '16:30'));
+  assert.ok(p.notFitting.length >= 1, 'reports what will not fit');
+  const before = store.state.metadata.revision;
+  assert.equal(store.state.metadata.revision, before);
+  await must(store.dispatch('applyDelay', { proposal: p }));
+  assert.equal(dayOccurrences(store.state, MON).find((o) => o.role === 'inquiries').end, '12:45');
+  const sh = proposeDelay(store.state, MON, dayOccurrences(store.state, MON).find((o) => o.role === 'opening').id, 10, 'shorten');
+  assert.ok(sh.changes.length >= 1);
+});
+
+test('team: unscheduled queue, ad hoc meeting, answer, decision→task without duplicates, question→FAQ', async () => {
+  const { store } = await makeStore({ date: MON });
+  const q1 = await must(store.dispatch('addQuestion', { title: 'איך מטפלים במקרה כללי?', audience: 'team' }));
+  const q2 = await must(store.dispatch('addQuestion', { title: 'נושא לבירור', audience: 'manager', kind: 'topic' }));
+  assert.deepEqual(agendaQueue(store.state, MON).map((q) => q.id).sort(), [q1, q2].sort(), 'open without any meeting');
+  const m = await must(store.dispatch('addMeeting', { title: 'פגישה עם המנהל', meetingType: 'manager', date: '2026-12-01', start: '14:00', durationMinutes: 15, confirm: true }));
+  await must(store.dispatch('linkQuestion', { meetingId: m, questionId: q2 }));
+  assert.deepEqual(agendaQueue(store.state, MON).map((q) => q.id), [q1]);
+  assert.equal(upcomingMeetings(store.state, MON).length, 1);
+  assert.ok(dayOccurrences(store.state, '2026-12-01').some((o) => o.kind === 'meeting'));
+  const dec = await must(store.dispatch('addDecision', { meetingId: m, questionId: q2, text: 'לבדוק ולעדכן', createTask: { deadline: '2026-12-05' } }));
+  const tId = store.state.meetingDecisions[0].taskId;
+  assert.ok(tId);
+  assert.equal(await must(store.dispatch('decisionToTask', { decisionId: dec })), tId, 'no duplicate follow-up');
+  assert.equal(store.state.tasks.length, 1);
+  await must(store.dispatch('setQuestionStatus', { id: q1, status: 'answered', answer: 'לפי הנוהל הכללי', recurring: true }));
+  assert.equal(faqCandidates(store.state).length, 1);
+  const f = await must(store.dispatch('questionToFaq', { questionId: q1 }));
+  assert.equal(await must(store.dispatch('questionToFaq', { questionId: q1 })), f);
+  assert.equal(store.state.faqEntries.length, 1);
+  assert.deepEqual(store.state.faqEntries[0].questionIds, [q1]);
+  await must(store.dispatch('setMeetingStatus', { id: m, status: 'canceled' }));
+  assert.ok(!dayOccurrences(store.state, '2026-12-01').some((o) => o.kind === 'meeting'), 'cancel releases time');
+  assert.equal(store.state.questions.length, 2, 'questions preserved');
+  assert.equal(store.state.meetingDecisions.length, 1, 'decisions preserved');
+  assert.ok(globalSearch(store.state, 'נוהל').some((r) => r.type === 'question'));
+});
+
+test('issues, notes, waiting center, alerts, closing and reports', async () => {
+  const { store } = await makeStore({ date: MON, minute: 16 * 60 + 5 });
+  const i = await must(store.dispatch('addIssue', { title: 'תקלת סנכרון', reportedTo: 'it', followUpOn: MON }));
+  await must(store.dispatch('addIssueOccurrence', { id: i, date: MON }));
+  assert.equal(store.state.issueLogs[0].occurrences.length, 2);
+  const it = await must(store.dispatch('issueToTask', { id: i }));
+  assert.equal(await must(store.dispatch('issueToTask', { id: i })), it);
+  const n = await must(store.dispatch('saveNote', { body: 'רשומה כללית' }));
+  await must(store.dispatch('noteToTask', { id: n }));
+  assert.ok(waitingCenter(store.state, MON).some((w) => w.type === 'issue' && w.due));
+  const alerts = computeAlerts(store.state, MON, { minute: 600, nowIso: '2026-11-30T08:00:00Z' });
+  assert.ok(alerts.some((a) => a.type === 'followUp'));
+  assert.ok(alerts.some((a) => a.type === 'backup'));
+  await must(store.dispatch('addInquiry', { date: MON, quantity: 7 }));
+  const s = closingSummary(store.state, MON);
+  assert.equal(s.inquiries.completed, 7); assert.equal(s.inquiries.target, 10);
+  const r = await store.dispatch('closeDay', { date: MON, checklist: { allocate: true } });
+  assert.ok(r.confirm, 'partial close requires explicit confirmation');
+  await must(store.dispatch('closeDay', { date: MON, checklist: { allocate: true }, confirm: true }));
+  const rep = store.state.dailyReports[MON];
+  assert.equal(rep.partial, true);
+  assert.equal(rep.checklist['open-work'], false, 'preserves what was not done');
+  assert.equal(store.state.tasks.filter((t) => t.status === 'done').length, 0, 'closing completes nothing');
+  const pr = periodReport(store.state, MON, MON, MON);
+  assert.equal(pr.inquiries.completed, 7);
+  assert.equal(pr.blocks.unknownActual, 0);
+  await must(store.dispatch('reopenDay', { date: MON }));
+  assert.equal(store.state.dailyReports[MON].snapshot.target, 10);
+});

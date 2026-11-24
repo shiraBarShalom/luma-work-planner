@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "luma-work-backup.v1.schema.json",
+  "title": "Luma full backup (luma-work-backup) v1",
+  "description": "Complete local state envelope. Restoring replaces the whole database after explicit confirmation and a pre-restore recovery snapshot. The `data` document is validated in depth by js/data/validation.js (types, enums, references, non-negative inquiry totals) and migrated by js/data/migrations.js. Not interchangeable with luma-work-plan.",
+  "type": "object",
+  "required": ["format", "backupVersion", "exportedAt", "schemaVersion", "data"],
+  "properties": {
+    "format": { "const": "luma-work-backup" },
+    "backupVersion": { "const": 1 },
+    "exportedAt": { "type": "string", "format": "date-time" },
+    "app": { "type": "object", "properties": { "id": { "const": "luma-work-planner" }, "version": { "type": "string" } } },
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "revision": { "type": "integer", "minimum": 0 },
+    "counts": { "type": "object", "additionalProperties": { "type": "integer" } },
+    "data": {
+      "type": "object",
+      "required": ["metadata", "settings", "dayTemplates", "weekOverrides", "dayOverrides", "calendarBlocks", "occurrenceOverrides", "blockCompletions", "tasks", "recurringRules", "dailyPriorities", "inquiryLogs", "targetHistory", "questions", "meetings", "meetingDecisions", "faqEntries", "issueLogs", "workNotes", "dailyReports", "importHistory", "alertDismissals", "dayNotes"],
+      "properties": {
+        "metadata": {
+          "type": "object",
+          "required": ["product", "format", "schemaVersion", "revision", "createdAt", "updatedAt"],
+          "properties": {
+            "product": { "const": "luma" },
+            "format": { "const": "luma-work-state" },
+            "schemaVersion": { "type": "integer", "minimum": 1 },
+            "revision": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "tasks": { "type": "array" },
+        "inquiryLogs": { "type": "array" },
+        "questions": { "type": "array" },
+        "meetings": { "type": "array" }
+      }
+    }
+  }
+}
