@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isValidDate, isValidTime, addDays, weekStart, diffDays, monthGrid, addMonths, zonedParts, hebrewDate, toMin, fromMin, weekday } from '../../js/dates.js';
+import { isValidDate, isValidTime, addDays, weekStart, diffDays, monthGrid, addMonths, zonedParts, toMin, fromMin, weekday } from '../../js/dates.js';
 
 test('strict date validation including leap days', () => {
   assert.ok(isValidDate('2028-02-29'));
@@ -48,5 +48,4 @@ test('Jerusalem wall clock is independent of host timezone', () => {
 test('time helpers and Hebrew date', () => {
   assert.equal(toMin('09:15'), 555);
   assert.equal(fromMin(555), '09:15');
-  assert.match(hebrewDate('2026-11-30'), /ב/);
 });

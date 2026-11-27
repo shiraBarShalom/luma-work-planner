@@ -6,8 +6,9 @@ import { validateState } from './data/validation.js';
 import { migrateState, DataError } from './data/migrations.js';
 import { createInitialState } from './seed.js';
 import { markUncached } from './engine/cache.js';
+import { recurringSignature } from './engine/schedule.js';
 import { ConflictError } from './db.js';
-import { LIMITS } from './config.js';
+import { LIMITS, BROADCAST_CHANNEL } from './config.js';
 
 /**
  * @param {Object} opts
@@ -70,7 +71,7 @@ export function createStore({ adapter, now, uid, mode = 'primary' }) {
   let channel = null;
   try {
     if (typeof BroadcastChannel !== 'undefined') {
-      channel = new BroadcastChannel('luma-work-planner');
+      channel = new BroadcastChannel(BROADCAST_CHANNEL);
       if (typeof channel.unref === 'function') channel.unref(); // never keep a Node test process alive
       channel.onmessage = (ev) => { if (ev.data?.type === 'revision') api.checkExternal(); };
     }
@@ -110,9 +111,9 @@ export function createStore({ adapter, now, uid, mode = 'primary' }) {
         persistedRevision = state.metadata.revision;
         return { fresh: true };
       }
-      const { state: migrated, migrated: didMigrate, from } = migrateState(doc);
+      const c = now();
+      const { state: migrated, migrated: didMigrate, from } = migrateState(doc, { today: c.today, nowIso: c.nowIso });
       if (didMigrate) {
-        const c = now();
         await adapter.saveRecovery?.({ id: uid(), createdAt: c.nowIso, reason: `לפני שדרוג נתונים מגרסה ${from}`, revision: doc.metadata.revision, state: doc });
         migrated.metadata.revision = doc.metadata.revision + 1;
         await adapter.save(migrated, doc.metadata.revision);
@@ -147,6 +148,11 @@ export function createStore({ adapter, now, uid, mode = 'primary' }) {
         return { ok: false, code: 'exception', error: 'הפעולה נכשלה בגלל שגיאה פנימית. לא בוצע שינוי.' };
       }
       if (result && result.confirmRequired) return { ok: false, confirm: result.confirmRequired };
+      // Recurring activities are protected: an automated command (plan import/undo) may
+      // add other records but can never move, resize, replace or remove a recurring one.
+      if (cmd.automated && recurringSignature(state) !== recurringSignature(draft)) {
+        return { ok: false, code: 'protected', error: 'הפעולה נדחתה כי הייתה משנה פעילות חוזרת. פעילויות חוזרות משתנות רק בעריכה ידנית. לא בוצע שינוי.' };
+      }
       const v = validateState(draft);
       if (!v.ok) {
         console.error('invariant violation', name, v.errors);
@@ -215,7 +221,8 @@ export function createStore({ adapter, now, uid, mode = 'primary' }) {
         if (rev == null || rev === persistedRevision) return false;
         if (state.metadata.revision === persistedRevision && !saveTimer) {
           const doc = await adapter.load();
-          const { state: s } = migrateState(doc);
+          const c = now();
+          const { state: s } = migrateState(doc, { today: c.today, nowIso: c.nowIso });
           state = s;
           persistedRevision = s.metadata.revision;
           undoStack.length = 0;
@@ -230,7 +237,8 @@ export function createStore({ adapter, now, uid, mode = 'primary' }) {
     /** Conflict resolution: discard this tab's unsaved changes and load the stored document. */
     async reloadFromStorage() {
       const doc = await adapter.load();
-      const { state: s } = migrateState(doc);
+      const c = now();
+      const { state: s } = migrateState(doc, { today: c.today, nowIso: c.nowIso });
       state = s;
       persistedRevision = s.metadata.revision;
       undoStack.length = 0;

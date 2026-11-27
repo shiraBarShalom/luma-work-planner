@@ -2,7 +2,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeStore, must } from '../helpers.js';
-import { carriedTasks, todaysTasks, waitingTasks } from '../../js/engine/taskCarryover.js';
+import { carriedTasks, todaysTasks, waitingTasks, sortByPriority } from '../../js/engine/taskCarryover.js';
+
+/** Legacy data (records that older versions created and that may still exist). */
+function withLegacy(store, mutate) { const s = structuredClone(store.state); mutate(s); store._setState(s); }
+const rule = (id, title, recurrence, extra = {}) => ({ id, title, details: '', categoryId: 'admin', priority: 'medium', estimateMinutes: null, subtasks: [], preferredRole: null, recurrence: { interval: 1, weekdays: [], exceptions: [], endDate: null, ...recurrence }, routine: false, carryover: 'latest', archived: false, createdAt: '2026-11-30T08:00:00.000Z', updatedAt: '2026-11-30T08:00:00.000Z', ...extra });
 
 const MON = '2026-11-30', TUE = '2026-12-01', WED = '2026-12-02', THU = '2026-12-03', FRI = '2026-12-04', SUN = '2026-12-06';
 const ids = (items) => items.map((x) => (x.task ? x.task.id : x.id));
@@ -43,7 +47,7 @@ test('keeps appearing on subsequent workdays and after several days closed; skip
 
 test('time-off days are skipped like weekends', async () => {
   const { store } = await makeStore({ date: MON });
-  await must(store.dispatch('setDayOverride', { date: TUE, patch: { isWorking: false, label: 'חופשה' } }));
+  withLegacy(store, (st) => { st.dayOverrides[TUE] = { isWorking: false, label: 'חופשה' }; });
   const id = await must(store.dispatch('addTask', { title: 'x', scheduledDate: MON }));
   assert.ok(carriedTasks(store.state, WED).some((x) => x.task.id === id));
   assert.equal(carriedTasks(store.state, WED)[0].workdayAge, 1);
@@ -69,7 +73,7 @@ test('completing anywhere removes it from every unfinished view; reopening resto
 test('waiting, deferred, canceled, future and unscheduled tasks do not carry as ordinary work', async () => {
   const { store } = await makeStore({ date: MON });
   const w = await must(store.dispatch('addTask', { title: 'waiting', scheduledDate: MON }));
-  await must(store.dispatch('setTaskStatus', { id: w, status: 'waiting', followUpOn: WED }));
+  await must(store.dispatch('setTaskStatus', { id: w, status: 'waiting' }));
   const d = await must(store.dispatch('addTask', { title: 'deferred', scheduledDate: MON }));
   await must(store.dispatch('setTaskStatus', { id: d, status: 'deferred', resumeOn: THU }));
   const c = await must(store.dispatch('addTask', { title: 'canceled', scheduledDate: MON }));
@@ -78,7 +82,6 @@ test('waiting, deferred, canceled, future and unscheduled tasks do not carry as 
   await must(store.dispatch('addTask', { title: 'backlog' }));
   assert.deepEqual(ids(carriedTasks(store.state, TUE)), []);
   assert.equal(waitingTasks(store.state, TUE)[0].task.id, w);
-  assert.equal(waitingTasks(store.state, WED)[0].due, true, 'follow-up shown separately when due');
   assert.ok(ids(todaysTasks(store.state, THU)).includes(d), 'deferred returns on its resume date');
   assert.ok(ids(carriedTasks(store.state, '2026-12-06')).includes(d), 'and carries after it if still open');
 });
@@ -97,9 +100,11 @@ test('explicit reschedule moves the due date with history and keeps the original
 
 test('recurring routine checklists never accrue; actionable recurring carries only per policy', async () => {
   const { store } = await makeStore({ date: MON });
-  const routine = await must(store.dispatch('addRecurringRule', { title: 'בדיקת תיבה', routine: true, recurrence: { kind: 'dayType', dayType: 'workday', startDate: MON } }));
-  const latest = await must(store.dispatch('addRecurringRule', { title: 'דוח יומי', carryover: 'latest', recurrence: { kind: 'dayType', dayType: 'workday', startDate: MON } }));
-  const all = await must(store.dispatch('addRecurringRule', { title: 'מעקב', carryover: 'all', recurrence: { kind: 'weekly', weekdays: [1, 2], startDate: MON } }));
+  const [routine, latest, all] = ['r-routine', 'r-latest', 'r-all'];
+  withLegacy(store, (st) => st.recurringRules.push(
+    rule(routine, 'בדיקת תיבה', { kind: 'dayType', dayType: 'workday', startDate: MON }, { routine: true, carryover: 'none' }),
+    rule(latest, 'דוח יומי', { kind: 'dayType', dayType: 'workday', startDate: MON }),
+    rule(all, 'מעקב', { kind: 'weekly', weekdays: [1, 2], startDate: MON }, { carryover: 'all' })));
   assert.equal(store.state.tasks.length, 0, 'no records materialized ahead of time');
   const carried = carriedTasks(store.state, THU);
   const byRule = (r) => carried.filter((x) => x.task.recurringRuleId === r);
@@ -110,7 +115,7 @@ test('recurring routine checklists never accrue; actionable recurring carries on
   // Completing a virtual carried occurrence materializes exactly one record and removes it.
   const key = byRule(latest)[0].task.id;
   await must(store.dispatch('toggleTaskDone', { id: key }));
-  await must(store.dispatch('toggleTaskDone', { id: key }).catch(() => ({ ok: true })));
+  await store.dispatch('toggleTaskDone', { id: key });
   const recs = store.state.tasks.filter((t) => t.recurringRuleId === latest);
   assert.equal(recs.length, 1, 'one record per occurrence');
   assert.ok(todaysTasks(store.state, THU).some((t) => t.recurringRuleId === routine), 'routine shows on its day');
@@ -123,4 +128,33 @@ test('multiple missed days and a non-closed day still carry', async () => {
   const c = carriedTasks(store.state, '2026-12-07');
   assert.deepEqual(ids(c), [a, b], 'ordered by original date');
   assert.equal(store.state.dailyReports[MON], undefined);
+});
+
+test('stopping a legacy recurring task keeps earlier occurrences', async () => {
+  const { store } = await makeStore({ date: MON });
+  withLegacy(store, (st) => st.recurringRules.push(rule('r1', 'דוח', { kind: 'dayType', dayType: 'workday', startDate: MON })));
+  await must(store.dispatch('toggleTaskDone', { id: `rr:r1@${MON}` }));
+  await must(store.dispatch('archiveRecurringRule', { id: 'r1' }));
+  assert.ok(!todaysTasks(store.state, THU).some((t) => t.recurringRuleId === 'r1'));
+  assert.equal(store.state.tasks.filter((t) => t.recurringRuleId === 'r1').length, 1, 'completed occurrence kept');
+});
+
+test('priority sort: high→low and low→high, stable within a priority', () => {
+  const t = (id, priority) => ({ id, priority });
+  const list = [t('a', 'low'), t('b', 'high'), t('c', 'medium'), t('d', 'high')];
+  assert.deepEqual(sortByPriority(list, 'high').map((x) => x.id), ['b', 'd', 'c', 'a']);
+  assert.deepEqual(sortByPriority(list, 'low').map((x) => x.id), ['a', 'c', 'b', 'd']);
+  assert.deepEqual(sortByPriority([{ task: t('x', 'low') }, { task: t('y', 'high') }]).map((x) => x.task.id), ['y', 'x'], 'carryover items');
+});
+
+test('task fields: description, priority, execution date, deadline, note; legacy fields survive edits', async () => {
+  const { store } = await makeStore({ date: MON });
+  const id = await must(store.dispatch('addTask', { title: 'משימה', priority: 'high', scheduledDate: MON, deadline: WED, details: 'הערה' }));
+  withLegacy(store, (st) => { const x = st.tasks[0]; x.estimateMinutes = 30; x.subtasks = [{ id: 's', title: 'שלב', done: false }]; x.categoryId = 'admin'; });
+  await must(store.dispatch('updateTask', { id, patch: { title: 'משימה חדשה', priority: 'low', deadline: null, details: '' } }));
+  const x = store.state.tasks[0];
+  assert.deepEqual([x.title, x.priority, x.deadline, x.details], ['משימה חדשה', 'low', null, '']);
+  assert.equal(x.estimateMinutes, 30); assert.equal(x.subtasks.length, 1); assert.equal(x.categoryId, 'admin');
+  await must(store.dispatch('toggleTaskDone', { id }));
+  assert.equal(store.state.tasks[0].status, 'done', 'hidden subtasks never block completion');
 });

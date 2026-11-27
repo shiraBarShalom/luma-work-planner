@@ -1,63 +1,60 @@
-// Neutral default configuration. Everything here is editable seed data, not business logic:
-// work days, locations, hours, phone-duty coverage, the daily template, targets and the
-// closing checklist are all changed through Settings. No personal records, no example
-// tasks and no formal team meetings are seeded.
+// Neutral default configuration and the fixed weekly schedule. No personal records, no
+// example tasks and no meetings are seeded. The weekly schedule is a set of ordinary
+// recurring activities (Sunday-Thursday) with stable IDs, so seeding and migration can
+// never create duplicates; recurring activities are automatically protected from
+// automated changes (see store.js).
 import { STATE_FORMAT, SCHEMA_VERSION, TIMEZONE } from './config.js';
 import { uid } from './ids.js';
+import { zonedParts } from './dates.js';
 
 export const DEFAULT_TEMPLATE_ID = 'tpl-default';
+/** Category used for activities the user adds. Categories are internal (not shown in the UI). */
+export const ACTIVITY_CATEGORY = 'activity';
+export const SUN_TO_THU = [0, 1, 2, 3, 4];
 
 export function defaultCategories() {
   return [
-    { id: 'inquiries', label: 'פניות', color: '#286C96', roles: ['inquiries', 'followup'], plannerWeight: 2, archived: false },
-    { id: 'email', label: 'מייל ומעקבים', color: '#4F86B5', roles: ['email1', 'email2'], plannerWeight: 1, archived: false },
-    { id: 'crm', label: 'העברות ל-CRM', color: '#6F8FB8', roles: ['email1', 'email2'], plannerWeight: 1, batchAtEnd: true, archived: false },
-    { id: 'team', label: 'צוות ומנהל', color: '#34745D', roles: ['teamReception'], plannerWeight: 1, archived: false },
-    { id: 'documents', label: 'מסמכים', color: '#9A620E', roles: ['followup'], plannerWeight: 1, archived: false },
-    { id: 'followups', label: 'מעקבים', color: '#B07A3B', roles: ['followup', 'email2'], plannerWeight: 1, archived: false },
-    { id: 'planning', label: 'הכנה למחר', color: '#6D5BA8', roles: ['closing'], plannerWeight: 1, archived: false },
-    { id: 'admin', label: 'כללי', color: '#526273', roles: ['followup'], plannerWeight: 0, archived: false },
+    { id: ACTIVITY_CATEGORY, label: 'פעילות', color: '#286C96', roles: [], plannerWeight: 0, archived: false },
+    { id: 'inquiries', label: 'פניות', color: '#286C96', roles: [], plannerWeight: 0, archived: false },
+    { id: 'email', label: 'מייל', color: '#4F86B5', roles: [], plannerWeight: 0, archived: false },
+    { id: 'team', label: 'צוות', color: '#34745D', roles: [], plannerWeight: 0, archived: false },
+    { id: 'planning', label: 'הכנה למחר', color: '#6D5BA8', roles: [], plannerWeight: 0, archived: false },
+    { id: 'admin', label: 'כללי', color: '#526273', roles: [], plannerWeight: 0, archived: false },
     { id: 'meeting', label: 'פגישות', color: '#A0527A', roles: [], plannerWeight: 0, archived: false },
-    { id: 'routine', label: 'שגרה', color: '#7D8FA3', roles: ['opening'], plannerWeight: 0, archived: false },
-    { id: 'break', label: 'הפסקה', color: '#C29A6B', roles: ['break'], plannerWeight: 0, archived: false },
+    { id: 'routine', label: 'שגרה', color: '#7D8FA3', roles: [], plannerWeight: 0, archived: false },
+    { id: 'break', label: 'הפסקה', color: '#C29A6B', roles: [], plannerWeight: 0, archived: false },
   ];
 }
 
-export function defaultTemplateBlocks() {
-  return [
-    {
-      role: 'opening', title: 'פתיחת יום', start: '09:00', end: '09:15', categoryId: 'routine', protected: false, flexible: false, minMinutes: 10, anchor: 'start',
-      instructions: ['בלי מייל בפתיחת היום', 'בחירת שלוש משימות חיוניות להיום'],
-    },
-    {
-      role: 'inquiries', title: 'מענה לפניות', start: '09:15', end: '12:00', categoryId: 'inquiries', protected: false, flexible: true, minMinutes: 60, anchor: null,
-      instructions: ['ביום תורנות: פניות פשוטות בעזרת התשובות הנפוצות המאושרות', 'ביום ללא תורנות: פניות מורכבות שדורשות בירור', 'הטלפון האישי מחוץ להישג יד כשמתאים'],
-    },
-    {
-      role: 'email1', title: 'בלוק מייל ראשון', start: '12:00', end: '13:00', categoryId: 'email', protected: false, flexible: true, minMinutes: 30, anchor: null,
-      instructions: ['Outlook, WhatsApp ומעקבים טלפוניים', 'העברות ל-CRM בריכוז לקראת סוף הבלוק'],
-    },
-    {
-      role: 'break', title: 'הפסקה', start: '13:00', end: '14:00', categoryId: 'break', protected: true, flexible: false, minMinutes: 60, anchor: null,
-      instructions: [],
-    },
-    {
-      role: 'teamReception', title: 'שעת קבלה לצוות ופגישה עם המנהל', start: '14:00', end: '14:15', categoryId: 'team', protected: false, flexible: false, minMinutes: 15, anchor: null,
-      instructions: ['לרכז שאלות מהצוות לחלון הזה', 'נושאים פתוחים למנהל', 'שאלה שחוזרת – להעביר לתשובות הנפוצות'],
-    },
-    {
-      role: 'followup', title: 'השלמת פניות וטיפול במייל', start: '14:15', end: '15:30', categoryId: 'documents', protected: false, flexible: true, minMinutes: 30, anchor: null,
-      instructions: ['השלמת יעד הפניות או טיפול במסמכים ובמעקבים', 'תקלת סנכרון שחוזרת – לרשום ביומן התקלות ולהסלים למנהל או ל-IT'],
-    },
-    {
-      role: 'email2', title: 'בלוק מייל שני', start: '15:30', end: '16:00', categoryId: 'email', protected: false, flexible: true, minMinutes: 15, anchor: null,
-      instructions: ['השלמת עבודה הקשורה למייל ולמעקבים'],
-    },
-    {
-      role: 'closing', title: 'סגירת יום', start: '16:00', end: '16:30', categoryId: 'planning', protected: false, flexible: false, minMinutes: 15, anchor: 'end',
-      instructions: ['הקצאת פניות למחר', 'סקירת עבודה פתוחה', 'רישום מה הושלם היום'],
-    },
-  ];
+/**
+ * The permanent weekly schedule (Sunday-Thursday). `key` is stable and becomes part of
+ * the activity ID (`default-<key>`), which makes seeding and migration idempotent.
+ */
+export const WEEKLY_SCHEDULE = Object.freeze([
+  { key: 'opening', start: '08:45', end: '09:00', title: 'פתיחת יום', categoryId: 'routine', notes: 'בלי מייל. בחירת שלושה דברים שחייבים להיגמר היום.' },
+  { key: 'phones', start: '09:00', end: '13:00', title: 'מענה לטלפונים ולפניות ב-CRM', categoryId: 'inquiries', notes: '' },
+  { key: 'break', start: '13:00', end: '14:00', title: 'הפסקה', categoryId: 'break', notes: '' },
+  { key: 'team', start: '14:00', end: '14:15', title: 'זמן קבלה לשאלות של הצוות', categoryId: 'team', notes: '' },
+  { key: 'callbacks', start: '14:15', end: '14:30', title: 'חזרה טלפונית לפונים', categoryId: 'inquiries', notes: '' },
+  { key: 'email', start: '14:30', end: '15:45', title: 'טיפול במיילים', categoryId: 'email', notes: '' },
+  { key: 'allocation', start: '15:45', end: '16:15', title: 'הקצאת פניות לצוות למחר', categoryId: 'planning', notes: '' },
+  { key: 'closing', start: '16:15', end: '16:30', title: 'סגירת יום', categoryId: 'planning', notes: 'רשימת מה שנשאר פתוח.' },
+]);
+export const scheduleBlockId = (key) => `default-${key}`;
+
+/** Recurring calendar blocks for the weekly schedule, starting on `startDate`. */
+export function weeklyScheduleBlocks(startDate, nowIso) {
+  return WEEKLY_SCHEDULE.map((s) => ({
+    id: scheduleBlockId(s.key), date: startDate, start: s.start, end: s.end, title: s.title, categoryId: s.categoryId,
+    role: null, notes: s.notes, pinned: false,
+    recurrence: { kind: 'weekly', interval: 1, weekdays: [...SUN_TO_THU], startDate, endDate: null, exceptions: [] },
+    source: 'default', seedKey: `weekly-schedule:${s.key}`, movedFrom: null, protected: false, flexible: false, minMinutes: 0,
+    instructions: [], createdAt: nowIso, updatedAt: nowIso,
+  }));
+}
+
+export function defaultNotificationSettings() {
+  return { activityStart: false, showDetails: false };
 }
 
 export function defaultSettings() {
@@ -68,26 +65,17 @@ export function defaultSettings() {
     theme: 'auto',
     reducedMotion: 'auto',
     defaultTemplateId: DEFAULT_TEMPLATE_ID,
-    workHours: { start: '09:00', end: '16:30' },
-    phoneDutyWindow: { start: '09:00', end: '12:00' },
-    // Index = weekday (0 = Sunday). Location, duty and hours are independent fields.
-    weekly: [
-      { isWorking: true, location: 'office', phoneDuty: true, workStart: null, workEnd: null },
-      { isWorking: true, location: 'office', phoneDuty: true, workStart: null, workEnd: null },
-      { isWorking: true, location: 'office', phoneDuty: true, workStart: null, workEnd: null },
-      { isWorking: true, location: 'office', phoneDuty: true, workStart: null, workEnd: null },
-      { isWorking: true, location: 'home', phoneDuty: true, workStart: null, workEnd: null },
-      { isWorking: false, location: null, phoneDuty: false, workStart: null, workEnd: null },
-      { isWorking: false, location: null, phoneDuty: false, workStart: null, workEnd: null },
-    ],
+    // Internal working-day calendar used for task carryover (Sunday-Thursday). Not shown in the UI.
+    workHours: { start: '08:45', end: '16:30' },
+    phoneDutyWindow: { start: '09:00', end: '13:00' },
+    weekly: [0, 1, 2, 3, 4, 5, 6].map((i) => ({ isWorking: i <= 4, location: i <= 4 ? 'office' : null, phoneDuty: false, workStart: null, workEnd: null })),
+    // Legacy routine templates are not generated on or after this date (null = never generated).
+    routineEndsOn: null,
     categories: defaultCategories(),
     planner: { assumedEstimateMinutes: 30, useAssumedEstimate: true, deadlineSoonDays: 2, clusterDays: 3, clusterCount: 3 },
-    closingChecklist: [
-      { id: 'allocate', label: 'הקציתי את הפניות למחר' },
-      { id: 'open-work', label: 'רשמתי מה נשאר פתוח' },
-      { id: 'accomplished', label: 'סימנתי מה הצלחתי היום' },
-    ],
+    closingChecklist: [{ id: 'open-work', label: 'רשמתי מה נשאר פתוח' }],
     backup: { reminderDays: 7, lastExportAt: null, lastExportKind: null },
+    notifications: defaultNotificationSettings(),
     header: {
       useAlternateDawn: false,
       rules: [
@@ -99,20 +87,22 @@ export function defaultSettings() {
       ],
     },
     taskTemplates: [],
-    showGuidance: true,
+    showGuidance: false,
   };
 }
 
+/** An empty routine template (kept for document compatibility; the schedule lives in calendarBlocks). */
 export function defaultTemplates() {
   return [{
     id: DEFAULT_TEMPLATE_ID,
     name: 'יום עבודה רגיל',
-    versions: [{ id: 'v1', effectiveFrom: '2000-01-01', nominalStart: '09:00', nominalEnd: '16:30', blocks: defaultTemplateBlocks() }],
+    versions: [{ id: 'v1', effectiveFrom: '2000-01-01', nominalStart: '08:45', nominalEnd: '16:30', blocks: [] }],
   }];
 }
 
-/** A complete, valid, empty state document. */
+/** A complete, valid state document with the weekly schedule starting today. */
 export function createInitialState(nowIso) {
+  const today = zonedParts(new Date(nowIso)).date;
   return {
     metadata: {
       product: 'luma', format: STATE_FORMAT, schemaVersion: SCHEMA_VERSION, revision: 0,
@@ -122,12 +112,13 @@ export function createInitialState(nowIso) {
     dayTemplates: defaultTemplates(),
     weekOverrides: {},
     dayOverrides: {},
-    calendarBlocks: [],
+    calendarBlocks: weeklyScheduleBlocks(today, nowIso),
     occurrenceOverrides: {},
     blockCompletions: {},
     tasks: [],
     recurringRules: [],
     dailyPriorities: {},
+    inquiryCounts: {},
     inquiryLogs: [],
     targetHistory: { defaults: [{ effectiveFrom: '2000-01-01', target: 10, setAt: nowIso }] },
     questions: [],

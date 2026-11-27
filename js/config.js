@@ -3,8 +3,7 @@
 // reads or writes data that belongs to another app served from the same origin.
 
 export const APP_ID = 'luma-work-planner';
-export const APP_NAME = 'Luma';
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '2.0.0';
 
 export const IDB_NAME = 'luma-work-planner';
 export const IDB_VERSION = 1;
@@ -17,12 +16,14 @@ export const CACHE_PREFIX = 'luma-work-planner-shell-';
 export const BROADCAST_CHANNEL = 'luma-work-planner';
 
 export const STATE_FORMAT = 'luma-work-state';
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 export const BACKUP_FORMAT = 'luma-work-backup';
 export const BACKUP_VERSION = 1;
 export const PLAN_FORMAT = 'luma-work-plan';
-export const PLAN_SCHEMA_VERSION = 1;
-export const PROMPT_VERSION = '1.0';
+export const PLAN_SCHEMA_VERSION = 2;
+/** Older plan versions that are still accepted and normalized on import. */
+export const PLAN_LEGACY_VERSIONS = [1];
+export const PROMPT_VERSION = '2.0';
 
 export const TIMEZONE = 'Asia/Jerusalem';
 

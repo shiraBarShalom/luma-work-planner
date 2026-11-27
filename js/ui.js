@@ -1,6 +1,7 @@
 // DOM helpers, icons, accessible sheets/dialogs, toasts and form controls.
 // User and imported strings are only ever inserted as text nodes. The `svg` attribute is
 // reserved for the static icon markup defined in this file.
+import { fmtDayDate, fmtLong } from './dates.js';
 
 const ICONS = {
   house: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M10 20v-6h4v6"/>',
@@ -94,6 +95,9 @@ export function h(tag, attrs, ...children) {
   return el;
 }
 
+/** Replace an element's children, skipping null/false entries (never renders "null"). */
+export const setChildren = (el, ...children) => el.replaceChildren(...children.flat(Infinity).filter((c) => c != null && c !== false));
+
 export const ic = (name, size) => h('span.icw', { svg: icon(name, size), 'aria-hidden': 'true' });
 /** Left-to-right isolated span for times, dates and ratios inside RTL text. */
 export const ltr = (text) => h('bdi.ltr', { dir: 'ltr' }, text);
@@ -102,10 +106,7 @@ export function btn(label, onclick, cls = '', iconName = null, attrs = {}) {
   return h('button.btn' + (cls ? '.' + cls.split(' ').filter(Boolean).join('.') : ''), { type: 'button', onclick, ...attrs }, iconName ? ic(iconName, 18) : null, label ? h('span', label) : null);
 }
 export function iconBtn(iconName, label, onclick, cls = '') {
-  return h('button.icon-btn' + (cls ? '.' + cls : ''), { type: 'button', onclick, 'aria-label': label, title: label, svg: icon(iconName, 22) });
-}
-export function linkBtn(label, href, cls = '', iconName = null) {
-  return h('a.btn' + (cls ? '.' + cls.split(' ').join('.') : ''), { href }, iconName ? ic(iconName, 18) : null, h('span', label));
+  return h('button.icon-btn' + (cls ? '.' + cls.split(' ').filter(Boolean).join('.') : ''), { type: 'button', onclick, 'aria-label': label, title: label, svg: icon(iconName, 22) });
 }
 
 // ---------- sheets / dialogs ----------
@@ -144,6 +145,17 @@ export function openSheet({ title, body, footer, onClose, labelledBy, beforeClos
     if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f[f.length - 1].focus(); }
     else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
   });
+  // Keep the sheet (and its save button) above the on-screen keyboard.
+  const vv = window.visualViewport;
+  const fit = () => {
+    if (!vv) return;
+    const kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+    panel.style.setProperty('--kb', kb + 'px');
+    panel.style.maxHeight = kb ? `${Math.round(vv.height - 8)}px` : '';
+  };
+  vv?.addEventListener('resize', fit);
+  vv?.addEventListener('scroll', fit);
+  panel.addEventListener('focusin', (e) => { if (e.target.matches?.('input, textarea, select')) setTimeout(() => e.target.scrollIntoView?.({ block: 'nearest' }), 250); });
   let closed = false;
   const api = {
     el: panel, body: content, set,
@@ -152,6 +164,8 @@ export function openSheet({ title, body, footer, onClose, labelledBy, beforeClos
       if (closed) return;
       if (beforeClose && result === undefined && beforeClose() === false) return;
       closed = true;
+      vv?.removeEventListener('resize', fit);
+      vv?.removeEventListener('scroll', fit);
       backdrop.classList.remove('open');
       const ms = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--motion')) || 0;
       setTimeout(() => backdrop.remove(), ms);
@@ -198,20 +212,6 @@ export function choose(title, options, { text } = {}) {
   });
 }
 
-export function promptText(title, { label, value = '', type = 'text', multiline = false, ok = 'שמירה', required = true, attrs = {} } = {}) {
-  return new Promise((resolve) => {
-    let res = null;
-    const inp = multiline ? textarea(value, { 'aria-label': label || title, ...attrs }) : input(type, value, { 'aria-label': label || title, ...attrs });
-    const err = h('p.form-error', { role: 'alert' });
-    const submit = () => {
-      if (required && !String(inp.value).trim()) { err.textContent = 'נדרש ערך'; inp.setAttribute('aria-invalid', 'true'); return; }
-      res = inp.value; sh.close(true);
-    };
-    if (!multiline) inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
-    const sh = openSheet({ title, onClose: () => resolve(res), body: [field(label || '', inp), err], footer: [btn('ביטול', () => sh.close(), 'ghost'), btn(ok, submit, 'primary')] });
-  });
-}
-
 // ---------- toast ----------
 let toastEl, toastTimer;
 export function toast(msg, { action, timeout = 4200, error = false } = {}) {
@@ -227,10 +227,39 @@ export function toast(msg, { action, timeout = 4200, error = false } = {}) {
 
 // ---------- form helpers ----------
 export function field(label, control, hint) {
-  const id = control.id || 'f-' + Math.random().toString(36).slice(2, 8);
-  control.id = id;
+  const target = control.input || control;
+  const id = target.id || 'f-' + Math.random().toString(36).slice(2, 8);
+  target.id = id;
   return h('div.field', h('label.field-label', { for: id }, label), control, hint ? h('small.field-hint', hint) : null);
 }
+
+/**
+ * Date field: shows the date in natural Hebrew ("יום שישי, 27 בנובמבר 2026") with the
+ * native date picker laid transparently on top, so the picker opens on tap on every
+ * device while the text never depends on the device locale or overflows its box.
+ * `.value` gets/sets the ISO date; `.input` is the native control (for labels/tests).
+ */
+export function dateInput(value, { label = 'תאריך', onchange = null, clearable = false, placeholder = 'בחירת תאריך', short = false, attrs = {} } = {}) {
+  const inp = h('input.date-native', { type: 'date', 'aria-label': label, ...attrs });
+  inp.value = value || '';
+  const text = h('span.date-text', { 'aria-hidden': 'true' });
+  const clear = clearable ? h('button.date-clear', { type: 'button', 'aria-label': `ניקוי ${label}`, svg: icon('x', 18), onclick: () => { inp.value = ''; sync(); onchange && onchange(''); } }) : null;
+  const wrap = h('div.date-field', text, inp, clear);
+  function sync() {
+    text.textContent = inp.value ? (short ? fmtDayDate(inp.value) : fmtLong(inp.value)) : placeholder;
+    wrap.classList.toggle('empty', !inp.value);
+    if (clear) clear.hidden = !inp.value;
+  }
+  inp.addEventListener('change', () => { sync(); onchange && onchange(inp.value); });
+  inp.addEventListener('input', sync);
+  sync();
+  Object.defineProperty(wrap, 'value', { get: () => inp.value, set: (v) => { inp.value = v || ''; sync(); } });
+  wrap.input = inp;
+  return wrap;
+}
+
+/** Time field (HH:MM), left-to-right so digits never reorder in RTL. */
+export const timeInput = (value, attrs = {}) => input('time', value, { dir: 'ltr', ...attrs });
 export const input = (type, value, attrs = {}) => {
   const el = h('input.input', { ...attrs });
   el.type = type;
@@ -247,8 +276,9 @@ export function select(options, value, attrs = {}) {
 export function seg(options, value, onchange, label = '') {
   const wrap = h('div.seg', { role: 'radiogroup', 'aria-label': label });
   const render = (v) => {
-    wrap.replaceChildren(...options.map((o) => h('button', {
-      type: 'button', role: 'radio', 'aria-checked': String(o.value === v), tabIndex: o.value === v ? 0 : -1,
+    const none = !options.some((x) => x.value === v);
+    wrap.replaceChildren(...options.map((o, idx) => h('button', {
+      type: 'button', role: 'radio', 'aria-checked': String(o.value === v), tabIndex: o.value === v || (none && idx === 0) ? 0 : -1,
       onclick: () => { wrap.value = o.value; render(o.value); onchange && onchange(o.value); },
       onkeydown: (e) => {
         const i = options.findIndex((x) => x.value === v);
@@ -283,16 +313,6 @@ export function check(label, checked, onchange, attrs = {}) {
   cb.addEventListener('change', () => onchange && onchange(cb.checked));
   return h('label.check', cb, h('span', label));
 }
-export function ring(value, target, size = 88, stroke = 8) {
-  const r = (size - stroke) / 2, c = 2 * Math.PI * r;
-  const pct = target ? Math.min(1, value / target) : 0;
-  const off = c * (1 - pct);
-  const el = h('div.ring', { style: { width: size + 'px', height: size + 'px' }, role: 'img', 'aria-label': target ? `${value} מתוך ${target}` : `${value}, ללא יעד` });
-  el.innerHTML = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true"><circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="var(--primary-soft)" stroke-width="${stroke}"/><circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="var(--primary)" stroke-width="${stroke}" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${off}"/></svg>`;
-  el.append(h('span.ring-val', h('bdi.ltr', target ? `${value}/${target}` : String(value))));
-  return el;
-}
-export const progress = (pct, label) => h('div.progress', { role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(Math.round(pct)), 'aria-label': label || '' }, h('span', { style: { width: Math.max(0, Math.min(100, pct)) + '%' } }));
 export const empty = (text, iconName = 'checkCircle') => h('div.empty', ic(iconName, 20), h('span', text));
 export function section(title, opts = {}, ...children) {
   const id = 's-' + Math.random().toString(36).slice(2, 8);
