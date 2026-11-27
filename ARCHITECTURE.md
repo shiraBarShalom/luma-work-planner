@@ -62,9 +62,9 @@ Fixed primary navigation (RTL): היום שלי, סדר היום, משימות, 
 |---|---|
 | Home / היום שלי | Weekday and date once; current activity (what, time, remaining, next; several if overlapping; a short neutral line when nothing is scheduled); inquiry counter (count, target, +, −, reset, progress); `3 המשימות החשובות שלי להיום` (up to three references to real tasks, completable). |
 | Agenda / סדר היום | One date navigation (arrows; tap the date to pick another); modes רשימה / ציר שעות over the same data; one notes field for the day shared by both modes. Timeline: hourly grid, tap to edit, drag/long-press to move, handle to resize, Alt+arrows on a keyboard, `הוספת פעילות`. List: activity cards (start-end, title, short note, completion checkbox, ⋯ menu with exactly הושלם חלקית, דילוג, ביטול הפעילות, עריכה). |
-| Tasks / משימות | Two tabs היום / הושלמו and a ⋯ menu with: all tasks this week, tomorrow, לא הסתיימו, עתידיות, ממתינות לתשובה, נדחו, בוטלו. Today has two separate sections: `משימות שלא הסתיימו עד היום` and `משימות להיום`. Search (title and note) and priority sort (high→low / low→high). |
+| Tasks / משימות | Two tabs היום / הושלמו and a ⋯ menu with: all tasks this week, tomorrow, לא הסתיימו, עתידיות, ממתינות לתשובה, נדחו, בוטלו. Today has two separate sections: `משימות שלא הסתיימו עד היום` and `משימות להיום`. Search (title and note) and priority sort (high→low / low→high). A `הוספת משימה` button at the end of the screen opens the task editor (the header + stays). |
 | Calendar / יומן | חודש (month/year navigation, the grid; tapping a day opens it), שבוע (week navigation and the weekly grid), יום (day navigation, grid, `הוספת פעילות`). Nothing else. |
-| Settings / הגדרות | Daily inquiry target; notifications; appearance and accessibility; links to backup and restore, planning import from ChatGPT, and updates/storage/privacy. |
+| Settings / הגדרות | Daily inquiry target, with a collapsed `היסטוריית פניות` (total to date and one row per day: date and count); notifications; appearance and accessibility; links to backup and restore, planning import from ChatGPT, and updates/storage/privacy. |
 | Alerts (bell) | Task deadlines that passed, are today or tomorrow; a backup reminder. |
 
 Quick add (+): `הוספת משימה`, `הוספת פעילות` - the same editors used everywhere.
@@ -97,7 +97,7 @@ Three priorities: up to three unique task IDs per date (`dailyPriorities`); pick
 
 ## 6. Inquiry counter
 
-A simple counter, not an inquiry-management system. `inquiryCounts` holds one non-negative integer per local date (Asia/Jerusalem). Tapping + adds one, − subtracts one (never below zero; the button is disabled at zero), reset sets the day to zero after confirmation. No record is created per tap. The count may exceed the target. Rollover: at local midnight a new date starts at zero; earlier dates keep their numbers. The target is the default target version in force on the date (default 10; changes in Settings apply from today on, so earlier days keep theirs). A legacy per-date target override, if present in old data, still applies to that date. Legacy count events (`inquiryLogs`) are kept unchanged for recovery and are not shown.
+A simple counter, not an inquiry-management system. `inquiryCounts` holds one non-negative integer per local date (Asia/Jerusalem). Tapping + adds one, − subtracts one (never below zero; the button is disabled at zero), reset sets the day to zero after confirmation. No record is created per tap. The count may exceed the target. Rollover: the count is keyed by the local date, so at local midnight a new date starts at zero and every earlier date keeps its final number. This holds while the app is open across midnight (the screen re-renders on the date change) and after the app was closed for days; there is no reset job, so nothing can reset twice. Manual reset clears only the current date. History: Settings shows, collapsed by default, the total to date and the count of each day with inquiries (newest first); no other analytics. The target is the default target version in force on the date (default 10; changes in Settings apply from today on, so earlier days keep theirs). A legacy per-date target override, if present in old data, still applies to that date. Legacy count events (`inquiryLogs`) are kept unchanged for recovery and are not shown.
 
 ## 7. Notifications
 
@@ -163,7 +163,7 @@ Retired features keep their records in the document and in backups as a recovera
 
 - IndexedDB primary store with revision checks (a stale tab cannot overwrite newer data), immediate persistence of critical actions (task completion, counter changes, imports, restores), debounced notes, honest saving/saved/error states, bounded recovery snapshots, degraded localStorage mode that is labeled as such, never seeding defaults over unreadable or newer data.
 - Namespaces: IndexedDB `luma-work-planner`, localStorage prefix `luma-work-planner:`, Cache Storage prefix `luma-work-planner-shell-`, service-worker scope `./`, manifest id `./?app=luma-work-planner`, formats `luma-work-state`, `luma-work-backup`, `luma-work-plan`.
-- Service worker precaches the app shell only; a new version installs completely before it is offered, is applied only after pending saves succeed, removes only Luma's obsolete caches and never touches IndexedDB.
+- Service worker precaches the app shell only; a new version installs completely before it is offered (only to a page that an earlier version was already controlling, so a first install never shows an update prompt), is applied only after pending saves succeed, removes only Luma's obsolete caches and never touches IndexedDB.
 
 ### 9.3 Migration v1 → v2
 

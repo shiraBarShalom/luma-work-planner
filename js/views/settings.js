@@ -2,10 +2,11 @@
 // and updates/storage/privacy.
 import { h, ic, ltr, btn, seg, section, input, check, openSheet, confirmDialog, toast, setChildren } from '../ui.js';
 import { S, run, store, nowCtx } from '../app.js';
-import { counterTarget } from '../engine/inquiries.js';
+import { counterTarget, counterHistory } from '../engine/inquiries.js';
 import { parseBackup } from '../data/backup.js';
 import { exportBackup, PRIVACY_NOTE } from '../export/backupExport.js';
 import { APP_VERSION } from '../config.js';
+import { fmtLong } from '../dates.js';
 import { storageInfo, requestPersistence, checkForUpdate } from '../platform.js';
 import { notificationSupport, requestNotificationPermission, showNotification, scheduleReminders } from '../notifications.js';
 
@@ -15,7 +16,11 @@ function targetSection(state) {
   const t = input('number', counterTarget(state, nowCtx().date), { min: 0, max: 1000, inputmode: 'numeric', 'aria-label': 'יעד פניות יומי', class: 'target-input' });
   const save = () => run('setDefaultTarget', { target: Number(t.value) }, { success: 'היעד נשמר' });
   t.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } });
-  return section('יעד פניות יומי', {}, h('div.inline-form', t, btn('שמירה', save, 'primary')));
+  const hist = counterHistory(state, nowCtx().date);
+  const history = h('details.more.history', h('summary', 'היסטוריית פניות'),
+    h('p.history-total', 'סה״כ עד היום: ', h('b', ltr(String(hist.total)))),
+    hist.days.length ? h('div.list', hist.days.map((d) => h('div.item.history-row', h('div.body', fmtLong(d.date)), h('b', ltr(String(d.count)))))) : null);
+  return section('יעד פניות יומי', {}, h('div.inline-form', t, btn('שמירה', save, 'primary')), history);
 }
 
 function notificationsSection(state) {

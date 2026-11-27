@@ -35,9 +35,9 @@ Bottom navigation (RTL): היום שלי, סדר היום, משימות, יומ�
 
 - **Home:** date line; current-activity card (label עכשיו / הפעילות הבאה, title, time range, remaining time, "אחר כך" line; several current activities listed compactly; otherwise one quiet line); inquiry counter card (פניות היום, large count / target, round − and + buttons, a thin progress bar, a small "איפוס" text button); `3 המשימות החשובות שלי להיום` list with checkboxes and an add-row button. No other content.
 - **Agenda:** date navigation (arrows, the date itself opens the picker); segmented רשימה / ציר שעות; list cards with time, title, optional one-or-two-line note, checkbox and ⋯; timeline with side-by-side lanes for overlaps and one `הוספת פעילות` button; one notes field at the end.
-- **Tasks:** segmented היום / הושלמו with a ⋯ button for more views; search field and priority-sort select in one row; on היום, the sections `משימות שלא הסתיימו עד היום` and `משימות להיום`. Rows: checkbox, priority color bar, title, small meta (original date, deadline), ⋯.
+- **Tasks:** segmented היום / הושלמו with a ⋯ button for more views; search field and priority-sort select in one row; on היום, the sections `משימות שלא הסתיימו עד היום` and `משימות להיום`. Rows: checkbox, priority color bar, title, small meta (original date, deadline), ⋯. A full-width soft `+ הוספת משימה` button closes the screen.
 - **Calendar:** segmented חודש / שבוע / יום. Month: arrows + month select + year field, then the grid only (today filled in blue; small dots for one-off activities and deadlines; the recurring schedule is not marked). Week: date-range navigation + grid. Day: date navigation + grid + `הוספת פעילות`.
-- **Settings:** small sections (daily target with inline save, notifications, appearance) and a short list of links (backup and restore, planning import, updates/storage/privacy).
+- **Settings:** small sections (daily target with inline save and a collapsed `היסטוריית פניות` disclosure: a total line and a plain list of date and count; notifications, appearance) and a short list of links (backup and restore, planning import, updates/storage/privacy).
 - **Sheets:** bottom sheets with a grab handle, title, close button, one short form and a sticky footer (primary action; a red text "מחיקה" when editing). Dates show as Hebrew text with the native picker overlaid.
 
 ## 4. Verification

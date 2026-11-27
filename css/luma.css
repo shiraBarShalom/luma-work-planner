@@ -346,3 +346,8 @@ details.more[open] > summary { margin-bottom: 8px; }
   .icon-btn.round { width: 48px; height: 48px; }
   .grid2 { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* inquiry history (settings) */
+.history-total { color: var(--text); margin: 0 0 8px; }
+.history-row { min-height: 44px; padding-inline: 14px; }
+.history-row b { font-weight: 600; color: var(--primary); }

@@ -1,13 +1,27 @@
 // Simple daily inquiry counter and the versioned default target.
 // The count is one non-negative number per local date (Asia/Jerusalem) in
-// `state.inquiryCounts`. Rollover: at local midnight a new date starts at 0; earlier dates
-// keep their number. Reset sets the current date back to 0. No record is created per tap.
+// `state.inquiryCounts`. Rollover: because the count is keyed by the local date, a new
+// date starts at 0 at local midnight and every earlier date keeps its final number - also
+// after the app was closed for days, and without a reset job that could run twice.
+// Manual reset clears only the current date. No record is created per tap.
 // Legacy count events (`inquiryLogs`, schema v1) are kept untouched for recovery only.
 
 /** Current count for a date (0 when nothing was counted). */
 export function countFor(state, date) {
   const n = state.inquiryCounts?.[date];
   return Number.isInteger(n) && n > 0 ? n : 0;
+}
+
+/**
+ * Daily history up to and including `today`, newest first: the final count of each past
+ * day and the current count of today. Days with zero are omitted. `total` sums them.
+ */
+export function counterHistory(state, today) {
+  const days = Object.entries(state.inquiryCounts || {})
+    .filter(([date, n]) => date <= today && Number.isInteger(n) && n > 0)
+    .map(([date, count]) => ({ date, count }))
+    .sort((a, b) => b.date.localeCompare(a.date));
+  return { total: days.reduce((a, d) => a + d.count, 0), days };
 }
 
 /** Default target version in force on a date. */

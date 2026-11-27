@@ -47,6 +47,14 @@
           "meta: original date for carried tasks, date if not today, deadline",
           "⋯ menu: העברה למחר, תאריך אחר, ממתינה לתשובה, דחייה עד, ביטול"
         ]
+      },
+      {
+        "id": "add",
+        "type": "button",
+        "label": "הוספת משימה",
+        "style": "soft, full width, plus icon",
+        "position": "end of the screen",
+        "action": "task editor (07-add-task.json)"
       }
     ]
   },
