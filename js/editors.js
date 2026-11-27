@@ -124,7 +124,7 @@ export function openBlockEditor(occId = null, { date = nowCtx().date, start = nu
       scope = await choose('מחיקת פעילות חוזרת', [{ value: 'this', label: 'רק הפעם' }, { value: 'future', label: 'מהפעם הזו והלאה', danger: true }]);
       if (!scope) return;
     }
-    if (!(await confirmDialog(`למחוק את ״${o.title}״${scope === 'future' ? ' מהיום הזה והלאה' : ''}?`, { danger: true, ok: 'מחיקה', title: 'מחיקת פעילות' }))) return;
+    if (scope === 'future' && !(await confirmDialog(`למחוק את ״${o.title}״ מהיום הזה והלאה?`, { danger: true, ok: 'מחיקה', title: 'מחיקת פעילות' }))) return;
     if (await run('deleteOccurrence', { occId: o.id, scope }, { success: 'הפעילות נמחקה' })) sh.close(true);
   };
   title.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } });
@@ -166,7 +166,6 @@ export function openTaskEditor(task = null, { date = nowCtx().date, defaults = {
     if (res) { sh.close(true); onSaved && onSaved(res); }
   };
   const remove = async () => {
-    if (!(await confirmDialog(`למחוק את ״${task.title}״?`, { danger: true, ok: 'מחיקה', title: 'מחיקת משימה' }))) return;
     if (await run('deleteTask', { id: task.id }, { success: 'המשימה נמחקה' })) sh.close(true);
   };
   title.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } });

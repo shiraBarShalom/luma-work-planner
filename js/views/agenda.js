@@ -2,8 +2,11 @@
 // over the same schedule data, with one shared notes field for the day.
 import { h, ltr, btn, iconBtn, seg, textarea, choose } from '../ui.js';
 import { S, run } from '../app.js';
-import { fromMin, isValidDate } from '../dates.js';
+import { fromMin, isValidDate, addDays } from '../dates.js';
+import { attachSwipe, goTo } from '../swipe.js';
 import { BLOCK_STATUS_LABEL } from '../data/schema.js';
+
+const STATUS_DONE_MSG = { done: 'הפעילות הושלמה', partial: 'סומן כהושלם חלקית', skipped: 'הפעילות דולגה', canceled: 'הפעילות בוטלה' };
 import { dayOccurrences } from '../engine/schedule.js';
 import { dateNav, checkBox, todayLink } from './common.js';
 import { openBlockEditor } from '../editors.js';
@@ -25,7 +28,7 @@ async function activityMenu(o) {
   ]);
   if (!v) return;
   if (v === 'edit') openBlockEditor(o.id);
-  else run('setBlockStatus', { occId: o.id, status: o.status === v ? 'planned' : v }, { success: o.status === v ? 'הסימון בוטל' : BLOCK_STATUS_LABEL[v] });
+  else run('setBlockStatus', { occId: o.id, status: o.status === v ? 'planned' : v }, { success: o.status === v ? 'הסימון בוטל' : STATUS_DONE_MSG[v] });
 }
 
 function activityCard(o, minute, isToday) {
@@ -33,9 +36,9 @@ function activityCard(o, minute, isToday) {
   const current = isToday && o.s <= minute && minute < o.e && o.status === 'planned';
   const cls = ['tl-card', o.status !== 'planned' ? o.status : '', current ? 'current' : ''].filter(Boolean).join('.');
   return h('div.' + cls, { dataset: { occ: o.id } },
-    checkBox(done, done ? `ביטול סימון ״${o.title}״` : `סימון ״${o.title}״ כהושלם`, () => run('setBlockStatus', { occId: o.id, status: done ? 'planned' : 'done' })),
+    checkBox(done, done ? `ביטול סימון ״${o.title}״` : `סימון ״${o.title}״ כהושלם`, () => run('setBlockStatus', { occId: o.id, status: done ? 'planned' : 'done' }, { success: done ? 'הסימון בוטל' : STATUS_DONE_MSG.done }), o.id),
     h('div.body',
-      h('div.tl-time', ltr(`${o.start}-${o.end}`)),
+      h('div.tl-time', ltr(`${o.start}-${o.end}`), current ? h('span.now-chip', 'עכשיו') : null),
       h('div.title', o.title),
       o.notes ? h('div.note', o.notes) : null,
       o.status !== 'planned' && !done ? h('div.state', BLOCK_STATUS_LABEL[o.status]) : null),
@@ -59,9 +62,11 @@ export function render(main, args, ctx) {
     ? [timeGrid(state, [date], { today: ctx.date, nowMinute: ctx.minute, onTap: (id) => openBlockEditor(id), onEmpty: (d, m) => openBlockEditor(null, { date: d, start: m }), onChange: moveFromGrid }),
       btn('הוספת פעילות', () => openBlockEditor(null, { date }), 'soft block', 'plus')]
     : (occs.length ? h('div.timeline', occs.map((o) => activityCard(o, ctx.minute, isToday))) : h('p.quiet-empty', 'אין פעילויות'));
-  main.replaceChildren(h('div.page',
+  const page = h('div.page',
     h('div.nav-row', dateNav(date, (d) => `#/agenda/${d}`), todayLink(date, ctx.date, `#/agenda/${ctx.date}`)),
     seg([{ value: 'list', label: 'רשימה' }, { value: 'grid', label: 'ציר שעות' }], mode, (v) => { saveUi('agendaMode', v); render(main, args, ctx); }, 'תצוגה'),
     view,
-    notesField(state, date)));
+    notesField(state, date));
+  attachSwipe(page, { next: () => goTo(`#/agenda/${addDays(date, 1)}`, 'next'), prev: () => goTo(`#/agenda/${addDays(date, -1)}`, 'prev') });
+  main.replaceChildren(page);
 }

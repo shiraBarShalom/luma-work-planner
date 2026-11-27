@@ -11,13 +11,15 @@ There is no account, server, cloud database, synchronization, AI API, telemetry 
 
 ## Screens
 
-- **היום שלי** - the date, the current activity (time, remaining time, what's next; all of them if several overlap), the inquiry counter (+, −, reset, daily target) and `3 המשימות החשובות שלי להיום`.
+- **היום שלי** - the date, the current activity (time, remaining time, what's next; all of them if several overlap), the inquiry counter (a ring with count/target, +, −, reset) and `3 המשימות החשובות שלי להיום`.
 - **סדר היום** - the day as a checklist (רשימה) or an hourly timeline (ציר שעות) over the same data, with one notes field. List cards: time, title, short note, checkbox and a menu (הושלם חלקית, דילוג, ביטול הפעילות, עריכה). Timeline: tap to edit, long-press/drag to move, handle to resize, Alt+arrows on a keyboard.
 - **משימות** - היום (with `משימות שלא הסתיימו עד היום` and `משימות להיום`) and הושלמו, plus a menu for this week, tomorrow, unfinished, upcoming, waiting for an answer, deferred and canceled. Search covers title and note; sort by priority either way. `הוספת משימה` at the bottom adds a task directly.
 - **יומן** - month, week and day.
 - **הגדרות** - daily inquiry target, notifications, appearance, backup and restore, planning import from ChatGPT, updates/storage/privacy.
 
-Header: time-of-day banner, greeting, the bell (deadline and backup reminders) and + (add a task or an activity). Both editors are short: a task has description, priority, execution date, optional deadline and note; an activity has title, date, start, end, notes and repeat.
+Swipe left or right to change the date in the agenda and calendar. Completing, skipping, canceling or deleting shows a short "ביטול" toast to undo.
+
+Header: time-of-day banner, greeting (with a name only if one is stored in your local data), the bell (deadline and backup reminders) and + (add a task or an activity). Both editors are short: a task has description, priority, execution date, optional deadline and note; an activity has title, date, start, end, notes and repeat.
 
 ## The weekly schedule
 
@@ -72,7 +74,8 @@ WebKit (Safari engine) checks run when `npx playwright install webkit` has been 
 - If IndexedDB is unavailable, Luma runs in a labeled limited mode (`localStorage`). Unreadable, foreign or newer-version data is never replaced with defaults.
 - Upgrading from 1.x migrates the data automatically on first start and keeps a recovery copy of the old version. Features removed in 2.0 (team and manager questions, meetings, FAQ, notebook, issue log, day closing, detailed inquiry log) keep their records in the data and in backups; they are just not shown.
 - Namespaces: IndexedDB `luma-work-planner`, localStorage prefix `luma-work-planner:`, Cache Storage prefix `luma-work-planner-shell-`, service-worker scope `./`, manifest id `./?app=luma-work-planner`.
-- Security guarantees, limitations and the latest audit: [`SECURITY.md`](SECURITY.md). Note that browser storage is per origin and Luma's GitHub Pages origin is shared with the account's other Pages sites.
+- Moving Luma to its own origin (planned, not done): [`docs/ORIGIN-MIGRATION.md`](docs/ORIGIN-MIGRATION.md).
+- Security protections, limitations and the latest audit: [`SECURITY.md`](SECURITY.md). Note that browser storage is per origin and Luma's GitHub Pages origin is shared with the account's other Pages sites.
 - Browser storage is not encryption and not a backup. Export backups regularly and keep them off the device. Store only generic work descriptions and counts.
 
 ## Formats

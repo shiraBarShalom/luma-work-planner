@@ -29,7 +29,7 @@ function inputCard() {
     session.errors = null; session.preview = null; session.plan = null; session.done = null;
     try {
       session.plan = parsePlan(area.value);
-      session.selection = {}; session.resolutions = {}; session.allowOutsideWeek = false;
+      session.selection = {}; session.resolutions = {}; session.allowOutsideWeek = false; session.showItems = undefined;
       session.preview = buildPreview(S(), session.plan, { allowOutsideWeek: false });
     } catch (e) {
       session.errors = e instanceof PlanError ? [{ path: '', message: e.message }, ...(e.errors || [])] : [{ path: '', message: 'לא ניתן לקרוא את התוכנית' }];
@@ -71,6 +71,17 @@ function timeResolution(item, onChange) {
   return out;
 }
 
+/** "2 משימות חדשות · 1 פעילויות חדשות" for what the approval would import now. */
+function summaryText(items) {
+  const n = (c, a) => items.filter((i) => i.collection === c && i.action === a).length;
+  const parts = [];
+  const tasks = n('tasks', 'add'), acts = n('activities', 'add'), upd = items.filter((i) => i.action === 'update').length;
+  if (tasks) parts.push(tasks === 1 ? 'משימה חדשה אחת' : `${tasks} משימות חדשות`);
+  if (acts) parts.push(acts === 1 ? 'פעילות חדשה אחת' : `${acts} פעילויות חדשות`);
+  if (upd) parts.push(upd === 1 ? 'עדכון אחד' : `${upd} עדכונים`);
+  return parts.join(' · ') || 'לא נבחרו פריטים';
+}
+
 function previewCard() {
   const p = session.preview;
   const st = S();
@@ -78,13 +89,15 @@ function previewCard() {
     session.preview = buildPreview(st, session.plan, { allowOutsideWeek: session.allowOutsideWeek });
     return previewCard();
   }
+  const summary = h('p.pv-summary', { 'aria-live': 'polite' });
   const status = h('div', { 'aria-live': 'polite' });
-  const approve = btn('אישור וייבוא', () => apply(), 'primary block', 'check');
+  const approve = btn('ייבוא', () => apply(), 'primary block', 'check');
   const refresh = () => {
     if (!session.preview || !approve.isConnected) return; // the preview was applied or replaced meanwhile
     const r = resolveSelection(session.preview, session.selection, session.resolutions);
     approve.disabled = !r.ok;
-    setChildren(status, r.ok ? h('p.small', `ייובאו ${r.items.length} פריטים.`) : h('ul.small.form-error', r.errors.map((e) => h('li', e.message))));
+    summary.textContent = summaryText(r.items);
+    setChildren(status, r.ok ? null : h('ul.small.form-error', r.errors.map((e) => h('li', e.message))));
   };
   const groups = ['activities', 'tasks'].map((c) => {
     const items = p.items.filter((i) => i.collection === c);
@@ -101,14 +114,20 @@ function previewCard() {
   });
   const unsupported = p.items.filter((i) => i.action === 'unsupported');
   const hasOutside = p.items.some((i) => i.issues.some((x) => x.type === 'outsideWeek'));
+  // Items that need an answer (missing time, manual edit, duplicates) open the list by default.
+  const needsLook = p.items.some((i) => i.issues.some((x) => x.blocking || x.type === 'possibleDuplicate'));
+  const warnings = [p.counts.duplicates ? `${p.counts.duplicates} כפילויות אפשריות` : null, unsupported.length ? `${unsupported.length} פריטים לא ייובאו` : null].filter(Boolean);
+  const details = h('details.more.pv-details', { open: session.showItems ?? needsLook, ontoggle: (e) => { session.showItems = e.target.open; } },
+    h('summary', `הצגת הפריטים (${p.items.length})`),
+    h('div.stack', ...groups.filter(Boolean), unsupported.length ? section('לא ייובאו', {}, h('ul.small.plain', unsupported.map((i) => h('li', h('b', i.title), ' - ', i.sub)))) : null));
   setTimeout(refresh, 0);
   return h('div.stack',
     section('3. בדיקה ואישור', {},
-      p.exactReplay ? h('p', 'התוכנית הזו כבר יובאה.') : h('p.small.muted', `${p.counts.add} חדשים · ${p.counts.update} עדכונים · ${p.counts.unchanged} כבר יובאו`),
+      p.exactReplay ? h('p', 'התוכנית הזו כבר יובאה.') : summary,
+      warnings.length ? h('p.pv-warn', warnings.join(' · ')) : null,
       hasOutside ? check('לכלול גם תאריכים מחוץ לשבוע', session.allowOutsideWeek, (v) => { session.allowOutsideWeek = v; session.preview = buildPreview(S(), session.plan, { allowOutsideWeek: v }); rerender(); }) : null,
-      ...groups.filter(Boolean),
-      unsupported.length ? section('לא ייובאו', {}, h('ul.small.plain', unsupported.map((i) => h('li', h('b', i.title), ' - ', i.sub)))) : null),
-    status, approve);
+      details),
+    status, p.exactReplay ? null : approve);
 }
 
 async function apply() {

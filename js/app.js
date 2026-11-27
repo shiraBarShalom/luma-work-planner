@@ -27,6 +27,9 @@ export async function run(name, payload = {}, { success = null, undo = true, sil
     return null;
   }
   r.saved.then((saved) => { if (!saved) toast('השינוי לא נשמר באחסון. ראו הודעה בראש המסך.', { error: true, timeout: 7000 }); });
-  if (success && !silent) toast(success, undo && store.canUndo ? { action: { label: 'ביטול', fn: () => store.undo() } } : {});
+  if (success && !silent) {
+    const undoAction = { label: 'ביטול', fn: async () => { const done = await store.undo(); toast(done ? 'בוטל' : 'כבר אי אפשר לבטל', { error: !done, timeout: 2200 }); } };
+    toast(success, undo && store.canUndo ? { action: undoAction, timeout: 6000 } : {});
+  }
   return r.result === undefined ? true : r.result;
 }

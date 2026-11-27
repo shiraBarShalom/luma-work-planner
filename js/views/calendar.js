@@ -2,13 +2,15 @@
 // selectors (no swipe required). The calendar itself is the content.
 import { h, btn, iconBtn, seg, input, select } from '../ui.js';
 import { S } from '../app.js';
-import { monthGrid, MONTHS, DAY_LETTERS, DAY_NAMES, weekStart, addMonths, weekLabel, fmtDayDate, isValidDate, weekDates, monthLabel } from '../dates.js';
+import { monthGrid, MONTHS, DAY_LETTERS, DAY_NAMES, weekStart, addMonths, addDays, weekLabel, fmtDayDate, isValidDate, weekDates, monthLabel } from '../dates.js';
 import { dayOccurrences } from '../engine/schedule.js';
 import { openDeadlines } from '../engine/taskCarryover.js';
 import { timeGrid } from '../timegrid.js';
 import { openBlockEditor } from '../editors.js';
 import { moveFromGrid } from './agenda.js';
 import { dateNav, todayLink } from './common.js';
+import { attachSwipe, goTo } from '../swipe.js';
+import { saveUi } from '../uiPrefs.js';
 
 const MODES = [{ value: 'month', label: 'חודש' }, { value: 'week', label: 'שבוע' }, { value: 'day', label: 'יום' }];
 
@@ -66,7 +68,11 @@ export function render(main, args, ctx) {
   const date = isValidDate(args[1]) ? args[1] : ctx.date;
   const content = mode === 'month' ? monthView(state, date, ctx) : mode === 'week' ? weekView(state, date, ctx) : dayView(state, date, ctx);
   const showToday = mode === 'month' ? date.slice(0, 7) !== ctx.date.slice(0, 7) : mode === 'week' ? weekStart(date) !== weekStart(ctx.date) : date !== ctx.date;
-  main.replaceChildren(h('div.page',
+  saveUi('calMode', mode);
+  const page = h('div.page',
     h('div.nav-row', seg(MODES, mode, (v) => { location.hash = `#/calendar/${v}/${date}`; }, 'תצוגת יומן'), showToday ? todayLink('', ctx.date, `#/calendar/${mode}/${ctx.date}`) : null),
-    content));
+    content);
+  const step = (n) => (mode === 'month' ? addMonths(date, n) : addDays(mode === 'week' ? weekStart(date) : date, mode === 'week' ? 7 * n : n));
+  attachSwipe(page, { next: () => goTo(`#/calendar/${mode}/${step(1)}`, 'next'), prev: () => goTo(`#/calendar/${mode}/${step(-1)}`, 'prev') });
+  main.replaceChildren(page);
 }

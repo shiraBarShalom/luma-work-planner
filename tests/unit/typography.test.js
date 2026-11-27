@@ -9,7 +9,7 @@ import { buildPlanningPrompt } from '../../js/data/prompt.js';
 import { WEEKLY_SCHEDULE } from '../../js/seed.js';
 import { weekLabel } from '../../js/dates.js';
 
-const FORBIDDEN = /[–—־]/;
+const FORBIDDEN = /[\u2013\u2014\u05BE]/;
 const root = new URL('../../', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 const walk = (d) => readdirSync(d).flatMap((n) => { const p = join(d, n); return statSync(p).isDirectory() ? walk(p) : [p]; });
 

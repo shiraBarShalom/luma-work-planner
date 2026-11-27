@@ -19,7 +19,8 @@ const FILTERS = new Set([...MAIN.map((m) => m.value), ...MORE.map((m) => m[0])])
 // and must not be copied outside the app's own data store.
 let searchText = '';
 
-const SORTS = [{ value: 'high', label: 'עדיפות: מהגבוהה לנמוכה' }, { value: 'low', label: 'עדיפות: מהנמוכה לגבוהה' }];
+// Short labels so the choice fits next to search on the narrowest phones.
+const SORTS = [{ value: 'high', label: 'עדיפות גבוהה' }, { value: 'low', label: 'עדיפות נמוכה' }];
 
 export function render(main, args, ctx) {
   const state = S();

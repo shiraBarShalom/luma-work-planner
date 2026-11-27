@@ -60,14 +60,16 @@ Fixed primary navigation (RTL): היום שלי, סדר היום, משימות, 
 
 | Screen | Content (only) |
 |---|---|
-| Home / היום שלי | Weekday and date once; current activity (what, time, remaining, next; several if overlapping; a short neutral line when nothing is scheduled); inquiry counter (count, target, +, −, reset, progress); `3 המשימות החשובות שלי להיום` (up to three references to real tasks, completable). |
-| Agenda / סדר היום | One date navigation (arrows; tap the date to pick another); modes רשימה / ציר שעות over the same data; one notes field for the day shared by both modes. Timeline: hourly grid, tap to edit, drag/long-press to move, handle to resize, Alt+arrows on a keyboard, `הוספת פעילות`. List: activity cards (start-end, title, short note, completion checkbox, ⋯ menu with exactly הושלם חלקית, דילוג, ביטול הפעילות, עריכה). |
+| Home / היום שלי | Weekday and date once; current activity (what, time, remaining, next; several if overlapping; a short neutral line when nothing is scheduled); inquiry counter (circular indicator with `count/target`, +, −, reset with undo); `3 המשימות החשובות שלי להיום` (up to three references to real tasks, completable). |
+| Agenda / סדר היום | One date navigation (arrows; tap the date to pick another); modes רשימה / ציר שעות over the same data; one notes field for the day shared by both modes. Timeline: hourly grid, tap to edit, drag/long-press to move, handle to resize, Alt+arrows on a keyboard, `הוספת פעילות`. List: activity cards (start-end, title, short note, completion checkbox, ⋯ menu with exactly הושלם חלקית, דילוג, ביטול הפעילות, עריכה); every current activity is highlighted with `עכשיו`. Horizontal swipe changes the date. |
 | Tasks / משימות | Two tabs היום / הושלמו and a ⋯ menu with: all tasks this week, tomorrow, לא הסתיימו, עתידיות, ממתינות לתשובה, נדחו, בוטלו. Today has two separate sections: `משימות שלא הסתיימו עד היום` and `משימות להיום`. Search (title and note) and priority sort (high→low / low→high). A `הוספת משימה` button at the end of the screen opens the task editor (the header + stays). |
 | Calendar / יומן | חודש (month/year navigation, the grid; tapping a day opens it), שבוע (week navigation and the weekly grid), יום (day navigation, grid, `הוספת פעילות`). Nothing else. |
 | Settings / הגדרות | Daily inquiry target, with a collapsed `היסטוריית פניות` (total to date and one row per day: date and count); notifications; appearance and accessibility; links to backup and restore, planning import from ChatGPT, and updates/storage/privacy. |
 | Alerts (bell) | Task deadlines that passed, are today or tomorrow; a backup reminder. |
 
 Quick add (+): `הוספת משימה`, `הוספת פעילות` - the same editors used everywhere.
+
+Undo: reversible actions (task completion and deletion, activity completion, skip, cancel and single deletion, counter reset) show a `ביטול` toast. Undo uses the store's bounded undo, which restores the previous document only if nothing changed since, so it never duplicates records or reverts later changes. The greeting name is not part of the code: it comes only from `settings.displayName` in local data (kept by migrations and backups).
 
 ### 3.1 Editors
 
