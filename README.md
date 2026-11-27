@@ -13,7 +13,7 @@ There is no account, server, cloud database, synchronization, AI API, telemetry 
 
 - **היום שלי** - the date, the current activity (time, remaining time, what's next; all of them if several overlap), the inquiry counter (+, −, reset, daily target) and `3 המשימות החשובות שלי להיום`.
 - **סדר היום** - the day as a checklist (רשימה) or an hourly timeline (ציר שעות) over the same data, with one notes field. List cards: time, title, short note, checkbox and a menu (הושלם חלקית, דילוג, ביטול הפעילות, עריכה). Timeline: tap to edit, long-press/drag to move, handle to resize, Alt+arrows on a keyboard.
-- **משימות** - היום (with `משימות שלא הסתיימו עד היום` and `משימות להיום`) and הושלמו, plus a menu for this week, tomorrow, unfinished, upcoming, waiting for an answer, deferred and canceled. Search covers title and note; sort by priority either way.
+- **משימות** - היום (with `משימות שלא הסתיימו עד היום` and `משימות להיום`) and הושלמו, plus a menu for this week, tomorrow, unfinished, upcoming, waiting for an answer, deferred and canceled. Search covers title and note; sort by priority either way. `הוספת משימה` at the bottom adds a task directly.
 - **יומן** - month, week and day.
 - **הגדרות** - daily inquiry target, notifications, appearance, backup and restore, planning import from ChatGPT, updates/storage/privacy.
 
@@ -31,7 +31,7 @@ Carryover is computed from dates and statuses whenever a day is shown - never a 
 
 ## Inquiry counter
 
-One number per day (Asia/Jerusalem). + adds one, − removes one (never below zero), איפוס resets today after confirmation. A new day starts at zero; earlier days are kept. The count may exceed the target (default 10, editable in Settings from today on).
+One number per day (Asia/Jerusalem). + adds one, − removes one (never below zero), איפוס resets today after confirmation. A new day starts at zero; earlier days are kept. The count may exceed the target (default 10, editable in Settings from today on). Settings › יעד פניות יומי › היסטוריית פניות (collapsed) shows the total to date and each day's count.
 
 ## Notifications
 

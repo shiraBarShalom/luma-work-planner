@@ -1,11 +1,12 @@
 // משימות - two primary views (today, completed) and a compact menu with more filters, over
 // the same canonical task records used by Home. Search covers title and note.
-import { h, iconBtn, seg, section, input, select, choose } from '../ui.js';
+import { h, btn, iconBtn, seg, section, input, select, choose } from '../ui.js';
 import { S } from '../app.js';
 import { addDays } from '../dates.js';
 import { carriedTasks, todaysTasks, weekTasks, completedTasks, upcomingTasks, waitingTasks, deferredTasks, backlogTasks, canceledTasks, sortByPriority } from '../engine/taskCarryover.js';
 import { taskMatches } from '../engine/search.js';
 import { taskList } from './common.js';
+import { openTaskEditor } from '../editors.js';
 import { loadUi, saveUi } from '../uiPrefs.js';
 
 const MAIN = [{ value: 'today', label: 'היום' }, { value: 'done', label: 'הושלמו' }];
@@ -59,5 +60,6 @@ export function render(main, args, ctx) {
     h('div.tabs-row', seg(MAIN, MAIN.some((m) => m.value === filter) ? filter : null, (v) => { location.hash = `#/tasks/${v}`; }, 'תצוגת משימות'), more),
     extraTitle ? h('h2.filter-title', extraTitle) : null,
     h('div.task-tools', search, sort),
-    content));
+    content,
+    btn('הוספת משימה', () => openTaskEditor(null, { date: filter === 'tomorrow' ? addDays(date, 1) : date }), 'soft block', 'plus')));
 }

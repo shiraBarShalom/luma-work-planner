@@ -59,7 +59,7 @@ const visibleText = (page) => page.evaluate(() => document.body.innerText);
 async function addTaskViaUi(page, base, title, { priority = null } = {}) {
   await go(page, base, '#/tasks/today');
   await page.getByRole('button', { name: 'הוספה', exact: true }).click();
-  await page.getByRole('button', { name: 'הוספת משימה' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'הוספת משימה' }).click();
   await page.getByLabel('תיאור המשימה').fill(title);
   if (priority) await page.getByRole('radio', { name: priority }).click();
   await page.locator('.sheet-foot').getByRole('button', { name: 'הוספה' }).click();
@@ -196,11 +196,46 @@ await test('tasks: search by title and note, priority sort both ways, filters be
   await ctx.close();
 });
 
+await test('tasks: dedicated add button at the bottom opens the task editor', async () => {
+  const { page, ctx } = await newPage(browser, base, { hash: '#/tasks/today' });
+  const last = await page.locator('.page > *').last().textContent();
+  assert.equal(last.trim(), 'הוספת משימה', 'button is the last element of the screen');
+  await page.locator('.page > button', { hasText: 'הוספת משימה' }).click();
+  assert.deepEqual(await page.locator('.sheet .field-label').allTextContents(), ['תיאור המשימה', 'עדיפות', 'תאריך ביצוע', 'מועד יעד', 'הערה']);
+  await page.getByLabel('תיאור המשימה').fill('נוספה מהכפתור');
+  await page.locator('.sheet-foot').getByRole('button', { name: 'הוספה' }).click();
+  await page.waitForSelector('[data-section="today"] .title:has-text("נוספה מהכפתור")');
+  assert.equal(await page.locator('header').getByRole('button', { name: 'הוספה', exact: true }).count(), 1, 'global + unchanged');
+  await ctx.close();
+});
+
+await test('counter: resets at Jerusalem midnight while open and after days closed; history in Settings collapsed by default', async () => {
+  const { page, ctx } = await newPage(browser, base, { time: jlm(MON, '23:58') });
+  for (let i = 0; i < 3; i++) await page.getByRole('button', { name: 'הוספת פנייה' }).click();
+  await page.waitForFunction(() => document.querySelector('.counter-value b')?.textContent === '3');
+  await page.clock.runFor(3 * 60 * 1000); // past midnight, app left open
+  await page.waitForFunction(() => document.querySelector('.counter-value b')?.textContent === '0', null, { timeout: 10000 });
+  await page.getByRole('button', { name: 'הוספת פנייה' }).click();
+  await page.clock.setSystemTime(jlm('2026-12-04', '09:00')); // closed for days
+  await page.reload(); await page.waitForSelector('.counter-value');
+  assert.equal(await page.locator('.counter-value b').textContent(), '0');
+  assert.deepEqual((await stateOf(page)).inquiryCounts, { [MON]: 3, '2026-12-01': 1 }, 'final counts kept, nothing reset twice');
+  await go(page, base, '#/settings');
+  const details = page.locator('details.history');
+  assert.equal(await details.getAttribute('open'), null, 'collapsed by default');
+  assert.equal(await page.locator('.history-row').isVisible().catch(() => false), false);
+  await page.getByText('היסטוריית פניות').click();
+  assert.match(await page.locator('.history-total').textContent(), /סה״כ עד היום:\s*4/);
+  assert.deepEqual(await page.locator('.history-row').evaluateAll((rows) => rows.map((r) => r.innerText.replace(/\s+/g, ' ').trim())),
+    ['יום שלישי, 1 בדצמבר 2026 1', 'יום שני, 30 בנובמבר 2026 3']);
+  await ctx.close();
+});
+
 await test('task editor: only description, priority, execution date, deadline, note', async () => {
   const { page, ctx } = await newPage(browser, base);
   await go(page, base, '#/tasks/today');
   await page.getByRole('button', { name: 'הוספה', exact: true }).click();
-  await page.getByRole('button', { name: 'הוספת משימה' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'הוספת משימה' }).click();
   assert.deepEqual(await page.locator('.sheet .field-label').allTextContents(), ['תיאור המשימה', 'עדיפות', 'תאריך ביצוע', 'מועד יעד', 'הערה']);
   assert.match(await page.locator('.sheet .date-text').first().textContent(), /יום שני, 30 בנובמבר/);
   await page.getByLabel('תיאור המשימה').fill('עם מועד');
@@ -559,7 +594,7 @@ async function layoutChecks(engineName, br, width) {
     }
     // Both editors: every field stays inside the sheet; inputs use ≥16px text (no focus zoom).
     for (const [hash, open] of [[`#/agenda/${MON}`, async () => { await page.getByRole('radio', { name: 'ציר שעות' }).click(); await page.getByRole('button', { name: 'הוספת פעילות' }).click(); }],
-      ['#/tasks/today', async () => { await page.getByRole('button', { name: 'הוספה', exact: true }).click(); await page.getByRole('button', { name: 'הוספת משימה' }).click(); }]]) {
+      ['#/tasks/today', async () => { await page.getByRole('button', { name: 'הוספה', exact: true }).click(); await page.getByRole('dialog').getByRole('button', { name: 'הוספת משימה' }).click(); }]]) {
       await go(page, base, hash);
       await open();
       await page.waitForSelector('.sheet .field');
@@ -594,7 +629,22 @@ let wk = null;
 if (process.env.LUMA_ENGINES !== 'chromium') {
   try { wk = await webkit.launch(); } catch { console.log('- WebKit not installed: WebKit layout checks skipped (npx playwright install webkit)'); }
 }
-if (wk) { for (const w of [320, 390]) await layoutChecks('webkit', wk, w); await wk.close(); }
+if (wk) {
+  for (const w of [320, 390]) await layoutChecks('webkit', wk, w);
+  await test('webkit: a first install never offers an "update" (even when navigating during installation)', async () => {
+    for (let i = 0; i < 3; i++) {
+      const ctx = await wk.newContext({ viewport: { width: 390, height: 844 } });
+      const page = await ctx.newPage();
+      await page.goto(base + '#/home'); await page.waitForSelector('.page');
+      await page.goto(base + '#/tasks/today'); await page.waitForSelector('.page');
+      await page.waitForTimeout(2000);
+      assert.equal(await page.locator('text=גרסה חדשה של Luma מוכנה').count(), 0, `run ${i + 1}`);
+      assert.ok(await page.evaluate(() => !!navigator.serviceWorker.controller), 'installed and controlling');
+      await ctx.close();
+    }
+  });
+  await wk.close();
+}
 
 await browser.close();
 for (const s of servers) s.kill();

@@ -30,6 +30,9 @@ export async function requestPersistence() {
 export function registerServiceWorker({ onUpdate, beforeApply }) {
   if (!('serviceWorker' in navigator) || !/^https:|^http:\/\/(localhost|127\.0\.0\.1)/.test(location.href)) return;
   let reloading = false;
+  // An update exists only if an earlier version was already running this page. (On a first
+  // install some engines report the new worker as controller before it is "installed".)
+  const hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener('controllerchange', () => { if (reloading) location.reload(); });
   navigator.serviceWorker.register('./sw.js', { scope: './' }).then((reg) => {
     const offer = (worker) => onUpdate(async () => {
@@ -38,10 +41,10 @@ export function registerServiceWorker({ onUpdate, beforeApply }) {
       reloading = true;
       worker.postMessage({ type: 'SKIP_WAITING' });
     });
-    if (reg.waiting && navigator.serviceWorker.controller) offer(reg.waiting);
+    if (reg.waiting && hadController) offer(reg.waiting);
     reg.addEventListener('updatefound', () => {
       const nw = reg.installing;
-      nw?.addEventListener('statechange', () => { if (nw.state === 'installed' && navigator.serviceWorker.controller) offer(nw); });
+      nw?.addEventListener('statechange', () => { if (nw.state === 'installed' && hadController) offer(nw); });
     });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
   }).catch((e) => console.warn('Service worker registration failed', e));
