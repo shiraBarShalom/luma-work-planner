@@ -3,7 +3,7 @@
 // cache first; it activates only when the page asks (after pending saves are flushed) or
 // when no page is controlled. Only Luma's own obsolete caches are removed; IndexedDB is
 // never touched here.
-const VERSION = '2.1.0';
+const VERSION = '2.1.1';
 const PREFIX = 'luma-work-planner-shell-';
 const CACHE = PREFIX + VERSION;
 const SHELL = [

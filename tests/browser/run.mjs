@@ -767,6 +767,11 @@ async function layoutChecks(engineName, br, width) {
       assert.equal(res.bad, false, `${r}: null/undefined text`);
       assert.equal(res.dash, false, `${r}: em dash, en dash or maqaf in visible text`);
       assert.equal(res.ctl, null, `${r}: control without touch-action`);
+      const selectClash = await page.evaluate(() => [...document.querySelectorAll('select.input')].filter((e) => e.offsetParent).filter((e) => {
+        const cs = getComputedStyle(e);
+        return parseFloat(cs.paddingLeft) < 30; // the dropdown arrow is drawn in the left 36px
+      }).length);
+      assert.equal(selectClash, 0, `${r}: select text can run under its arrow`);
       assert.deepEqual(await page.evaluate(() => window.__csp), [], `${r}: Content-Security-Policy violation`);
     }
     // Both editors: every field stays inside the sheet; inputs use ≥16px text (no focus zoom).
