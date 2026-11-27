@@ -8,6 +8,8 @@ import { extname, join, normalize, resolve } from 'node:path';
 const port = Number(process.argv[2] || process.env.PORT || 8080);
 const root = resolve(process.argv[3] || '.');
 const base = (process.argv[4] || '/luma/').replace(/\/?$/, '/');
+// Only this computer by default; set HOST=0.0.0.0 explicitly to test from a phone on the same network.
+const host = process.env.HOST || '127.0.0.1';
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg',
@@ -31,4 +33,4 @@ createServer(async (req, res) => {
   } catch (e) {
     res.writeHead(500); res.end('error');
   }
-}).listen(port, () => console.log(`Luma dev server: http://localhost:${port}${base}`));
+}).listen(port, host, () => console.log(`Luma dev server: http://localhost:${port}${base}${host === '127.0.0.1' ? '' : ` (listening on ${host})`}`));

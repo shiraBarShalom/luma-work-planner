@@ -124,12 +124,14 @@ export function validateState(s) {
     if (b.recurrence) { const re = recurrenceErrors(b.recurrence, isValidDate); if (re.length) err(p, re.join(',')); }
     else if (!isValidDate(b.date)) err(p, 'date');
     if (!catIds.has(b.categoryId)) err(p, 'category');
+    if (!optStr(b.notes, LIMITS.noteBody)) err(p, 'notes');
   }
   if (!isObj(s.occurrenceOverrides)) err('occurrenceOverrides', 'object');
   else for (const [k, o] of Object.entries(s.occurrenceOverrides)) {
     if (!isObj(o)) { err(`occurrenceOverrides.${k}`, 'object'); continue; }
     if ((o.start !== undefined && !isValidTime(o.start)) || (o.end !== undefined && !isValidTime(o.end))) err(`occurrenceOverrides.${k}`, 'times');
     if (o.start && o.end && toMin(o.end) <= toMin(o.start)) err(`occurrenceOverrides.${k}`, 'end before start');
+    if ((o.title !== undefined && !(isStr(o.title, LIMITS.title) && o.title.trim())) || !optStr(o.notes, LIMITS.noteBody)) err(`occurrenceOverrides.${k}`, 'text');
   }
   if (!isObj(s.blockCompletions)) err('blockCompletions', 'object');
   else for (const [k, c] of Object.entries(s.blockCompletions)) {
@@ -280,5 +282,8 @@ export function validateState(s) {
   else for (const [d, r] of Object.entries(s.dailyReports)) if (!isValidDate(d) || !isObj(r)) err('dailyReports', `entry ${d}`);
   if (!Array.isArray(s.importHistory)) err('importHistory', 'array');
   if (!isObj(s.alertDismissals) || !isObj(s.dayNotes)) err('misc', 'objects');
+  else for (const [d, n] of Object.entries(s.dayNotes)) {
+    if (!isValidDate(d) || !isObj(n) || !optStr(n.notes, LIMITS.noteBody) || !optStr(n.accomplishments, LIMITS.noteBody)) err('dayNotes', `entry ${d}`);
+  }
   return { ok: e.length === 0, errors: e };
 }

@@ -1,11 +1,11 @@
 // היום שלי - a short overview of today: the date, what is happening now and next, the
 // inquiry counter and the three important tasks. Nothing else.
-import { h, ltr, btn, iconBtn, section, choose, confirmDialog } from '../ui.js';
+import { h, ltr, btn, iconBtn, section, choose, ring } from '../ui.js';
 import { S, run } from '../app.js';
 import { fmtDayDate, hm, relDay } from '../dates.js';
 import { currentAndNext } from '../engine/schedule.js';
 import { carriedTasks, todaysTasks, upcomingTasks } from '../engine/taskCarryover.js';
-import { countFor, counterTarget, counterProgress } from '../engine/inquiries.js';
+import { countFor, counterTarget } from '../engine/inquiries.js';
 import { checkBox } from './common.js';
 import { openTaskEditor } from '../editors.js';
 
@@ -33,19 +33,14 @@ function activityCard(state, date, minute) {
 function counterCard(state, date) {
   const count = countFor(state, date);
   const target = counterTarget(state, date);
-  const pct = counterProgress(count, target) * 100;
-  const reset = async () => {
-    if (await confirmDialog(`לאפס את מונה הפניות של היום (${count})?`, { ok: 'איפוס', danger: true, title: 'איפוס המונה' })) run('resetCount', { date }, { success: 'המונה אופס' });
-  };
+  // Reset is reversible: the toast offers "ביטול" instead of a confirmation dialog.
+  const reset = () => run('resetCount', { date }, { success: 'המונה אופס' });
   return h('section.card.counter', { 'aria-label': 'מונה פניות' },
     h('div.counter-head', h('span.label', 'פניות היום'), count > 0 ? h('button.link-btn', { type: 'button', onclick: reset }, 'איפוס') : null),
     h('div.counter-row',
       Object.assign(iconBtn('minus', 'הפחתת פנייה', () => run('changeCount', { date, delta: -1 }), 'round'), { disabled: count === 0 }),
-      h('div.counter-value', { role: 'status', 'aria-live': 'polite', 'aria-label': target ? `${count} מתוך ${target}` : String(count) },
-        h('b', ltr(String(count))), target ? h('span.muted', ' / ', ltr(String(target))) : null),
-      iconBtn('plus', 'הוספת פנייה', () => run('changeCount', { date, delta: 1 }), 'round primary')),
-    h('div.progress' + (count >= target && target ? '.full' : ''), { role: 'progressbar', 'aria-label': 'התקדמות ליעד', 'aria-valuemin': '0', 'aria-valuemax': String(target || 0), 'aria-valuenow': String(Math.min(count, target || count)) },
-      h('span', { style: { width: `${pct}%` } })));
+      h('div.counter-value', { role: 'status', 'aria-live': 'polite' }, ring(count, target)),
+      iconBtn('plus', 'הוספת פנייה', () => run('changeCount', { date, delta: 1 }), 'round primary')));
 }
 
 function prioritiesSection(state, date) {
@@ -54,7 +49,7 @@ function prioritiesSection(state, date) {
   const rows = tasks.map((t) => {
     const done = t.status === 'done';
     return h('div.item' + (done ? '.done' : ''), { dataset: { taskId: t.id } },
-      checkBox(done, done ? `סימון ״${t.title}״ כלא הושלמה` : `סימון ״${t.title}״ כהושלמה`, () => run('toggleTaskDone', { id: t.id }, { success: done ? 'סומנה כפתוחה' : 'הושלמה' })),
+      checkBox(done, done ? `סימון ״${t.title}״ כלא הושלמה` : `סימון ״${t.title}״ כהושלמה`, () => run('toggleTaskDone', { id: t.id }, { success: done ? 'המשימה סומנה כפתוחה' : 'המשימה הושלמה' }), t.id),
       h('div.body', h('div.title', t.title)),
       iconBtn('x', `הסרת ״${t.title}״ מהמשימות החשובות`, () => run('setPriorities', { date, ids: ids.filter((x) => x !== t.id) })));
   });

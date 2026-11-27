@@ -3,13 +3,13 @@
 // cache first; it activates only when the page asks (after pending saves are flushed) or
 // when no page is controlled. Only Luma's own obsolete caches are removed; IndexedDB is
 // never touched here.
-const VERSION = '2.0.1';
+const VERSION = '2.1.0';
 const PREFIX = 'luma-work-planner-shell-';
 const CACHE = PREFIX + VERSION;
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './css/luma.css',
   './js/main.js', './js/app.js', './js/config.js', './js/clock.js', './js/ids.js', './js/dates.js', './js/seed.js', './js/store.js', './js/db.js',
-  './js/commands.js', './js/ui.js', './js/uiPrefs.js', './js/platform.js', './js/notifications.js', './js/editors.js', './js/timegrid.js',
+  './js/commands.js', './js/ui.js', './js/uiPrefs.js', './js/platform.js', './js/notifications.js', './js/swipe.js', './js/editors.js', './js/timegrid.js',
   './js/engine/cache.js', './js/engine/dayTemplates.js', './js/engine/schedule.js', './js/engine/recurrence.js', './js/engine/taskCarryover.js',
   './js/engine/inquiries.js', './js/engine/search.js', './js/engine/alerts.js', './js/engine/header.js',
   './js/data/schema.js', './js/data/safeJson.js', './js/data/validation.js', './js/data/migrations.js', './js/data/backup.js',

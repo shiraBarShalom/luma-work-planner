@@ -61,7 +61,8 @@ export function defaultSettings() {
   return {
     locale: 'he-IL',
     timezone: TIMEZONE,
-    displayName: 'כרמית',
+    // No name ships with the app; a name already stored in local data keeps being used.
+    displayName: '',
     theme: 'auto',
     reducedMotion: 'auto',
     defaultTemplateId: DEFAULT_TEMPLATE_ID,

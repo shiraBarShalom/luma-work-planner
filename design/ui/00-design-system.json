@@ -106,31 +106,31 @@
           "from": "05:00",
           "to": "08:00",
           "image": "dawn",
-          "greeting": "בוקר טוב, כרמית"
+          "greeting": "בוקר טוב"
         },
         {
           "from": "08:00",
           "to": "12:00",
           "image": "day",
-          "greeting": "בוקר טוב, כרמית"
+          "greeting": "בוקר טוב"
         },
         {
           "from": "12:00",
           "to": "17:00",
           "image": "day",
-          "greeting": "צהריים טובים, כרמית"
+          "greeting": "צהריים טובים"
         },
         {
           "from": "17:00",
           "to": "20:00",
           "image": "sunset",
-          "greeting": "ערב טוב, כרמית"
+          "greeting": "ערב טוב"
         },
         {
           "from": "20:00",
           "to": "05:00",
           "image": "night",
-          "greeting": "לילה טוב, כרמית"
+          "greeting": "לילה טוב"
         }
       ],
       "timeZone": "Asia/Jerusalem; fixed illustrative intervals, configurable; recompute at open/resume and boundaries while visible",

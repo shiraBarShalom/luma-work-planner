@@ -1,6 +1,6 @@
 {
   "name": "luma-work-planner",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "private": true,
   "description": "Luma (לומה) - Hebrew, RTL, offline-first personal work planner PWA. No build step; dev dependencies are for tests only.",
   "type": "module",

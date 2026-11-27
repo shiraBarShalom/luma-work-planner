@@ -12,6 +12,7 @@ import { migrateState } from './data/migrations.js';
 import { parseBackup } from './data/backup.js';
 import { applyTheme, registerServiceWorker, requestPersistence } from './platform.js';
 import { scheduleReminders } from './notifications.js';
+import { loadUi } from './uiPrefs.js';
 import { quickAdd, openTaskEditor } from './editors.js';
 import { downloadBlob } from './export/share.js';
 import * as today_ from './views/today.js';
@@ -67,7 +68,9 @@ function renderHeader(route, ctx) {
     h('button.hdr-btn', { type: 'button', 'aria-label': 'הוספה', onclick: () => quickAdd(ctx.date), svg: icon('plus', 22) }));
   const brand = h('div.wordmark', { 'aria-label': 'Luma' }, 'Luma');
   const back = ROUTES[route.name].back ? h('button.hdr-btn', { type: 'button', 'aria-label': 'חזרה', onclick: () => (history.length > 1 ? history.back() : (location.hash = '#/home')), svg: icon('right', 22) }) : null;
-  const img = h('img.hdr-img', { src: hd.src, alt: '', decoding: 'async', 'aria-hidden': 'true' });
+  // Reuse the banner element while the picture is unchanged, so re-renders never flash it.
+  const prevImg = headerEl.querySelector('.hdr-img');
+  const img = prevImg && prevImg.getAttribute('src') === hd.src ? prevImg : h('img.hdr-img', { src: hd.src, alt: '', decoding: 'async', 'aria-hidden': 'true' });
   bannerEl = hd.image;
   headerEl.className = `hdr ${isHome ? 'home' : 'secondary'}${hd.dark ? ' night' : ''}`;
   headerEl.dataset.banner = hd.image;
@@ -128,6 +131,7 @@ function render({ force = false } = {}) {
   const same = key === lastKey;
   const y = window.scrollY;
   const fk = focusKey();
+  const gridLeft = same ? mainEl.querySelector('.tg')?.scrollLeft : null; // keep the week grid's horizontal position
   lastDate = ctx.date;
   renderHeader(route, ctx);
   try {
@@ -140,10 +144,20 @@ function render({ force = false } = {}) {
   document.title = `${ROUTES[route.name].title} · Luma`;
   const navId = ROUTES[route.name].nav || null;
   document.querySelectorAll('[data-nav]').forEach((a) => { if (a.dataset.nav === navId) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
-  if (same) { window.scrollTo(0, y); restoreFocus(fk); }
-  else {
+  // The calendar tab reopens the presentation mode used last.
+  document.querySelectorAll('[data-nav="calendar"]').forEach((a) => { a.href = `#/calendar/${loadUi('calMode', 'month')}`; });
+  const dir = document.documentElement.dataset.navDir || '';
+  delete document.documentElement.dataset.navDir;
+  if (same) {
+    window.scrollTo(0, y);
+    if (gridLeft != null) { const g = mainEl.querySelector('.tg'); if (g) g.scrollLeft = gridLeft; }
+    restoreFocus(fk);
+  } else {
     window.scrollTo(0, 0);
     lastKey = key;
+    // A short entrance for a new screen (direction follows a swipe); disabled with reduced motion.
+    const page = mainEl.firstElementChild;
+    if (page) { page.classList.add('enter'); if (dir) page.dataset.dir = dir; }
     if (!force) mainEl.focus({ preventScroll: true });
   }
 }

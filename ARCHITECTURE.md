@@ -60,14 +60,16 @@ Fixed primary navigation (RTL): היום שלי, סדר היום, משימות, 
 
 | Screen | Content (only) |
 |---|---|
-| Home / היום שלי | Weekday and date once; current activity (what, time, remaining, next; several if overlapping; a short neutral line when nothing is scheduled); inquiry counter (count, target, +, −, reset, progress); `3 המשימות החשובות שלי להיום` (up to three references to real tasks, completable). |
-| Agenda / סדר היום | One date navigation (arrows; tap the date to pick another); modes רשימה / ציר שעות over the same data; one notes field for the day shared by both modes. Timeline: hourly grid, tap to edit, drag/long-press to move, handle to resize, Alt+arrows on a keyboard, `הוספת פעילות`. List: activity cards (start-end, title, short note, completion checkbox, ⋯ menu with exactly הושלם חלקית, דילוג, ביטול הפעילות, עריכה). |
+| Home / היום שלי | Weekday and date once; current activity (what, time, remaining, next; several if overlapping; a short neutral line when nothing is scheduled); inquiry counter (circular indicator with `count/target`, +, −, reset with undo); `3 המשימות החשובות שלי להיום` (up to three references to real tasks, completable). |
+| Agenda / סדר היום | One date navigation (arrows; tap the date to pick another); modes רשימה / ציר שעות over the same data; one notes field for the day shared by both modes. Timeline: hourly grid, tap to edit, drag/long-press to move, handle to resize, Alt+arrows on a keyboard, `הוספת פעילות`. List: activity cards (start-end, title, short note, completion checkbox, ⋯ menu with exactly הושלם חלקית, דילוג, ביטול הפעילות, עריכה); every current activity is highlighted with `עכשיו`. Horizontal swipe changes the date. |
 | Tasks / משימות | Two tabs היום / הושלמו and a ⋯ menu with: all tasks this week, tomorrow, לא הסתיימו, עתידיות, ממתינות לתשובה, נדחו, בוטלו. Today has two separate sections: `משימות שלא הסתיימו עד היום` and `משימות להיום`. Search (title and note) and priority sort (high→low / low→high). A `הוספת משימה` button at the end of the screen opens the task editor (the header + stays). |
 | Calendar / יומן | חודש (month/year navigation, the grid; tapping a day opens it), שבוע (week navigation and the weekly grid), יום (day navigation, grid, `הוספת פעילות`). Nothing else. |
 | Settings / הגדרות | Daily inquiry target, with a collapsed `היסטוריית פניות` (total to date and one row per day: date and count); notifications; appearance and accessibility; links to backup and restore, planning import from ChatGPT, and updates/storage/privacy. |
 | Alerts (bell) | Task deadlines that passed, are today or tomorrow; a backup reminder. |
 
 Quick add (+): `הוספת משימה`, `הוספת פעילות` - the same editors used everywhere.
+
+Undo: reversible actions (task completion and deletion, activity completion, skip, cancel and single deletion, counter reset) show a `ביטול` toast. Undo uses the store's bounded undo, which restores the previous document only if nothing changed since, so it never duplicates records or reverts later changes. The greeting name is not part of the code: it comes only from `settings.displayName` in local data (kept by migrations and backups).
 
 ### 3.1 Editors
 
@@ -110,7 +112,7 @@ Luma uses only capabilities that work with a static, offline PWA:
 - Each occurrence is announced at most once (notification tag plus a per-day local record). Lock-screen text is generic (`פעילות מתחילה עכשיו`) unless the user enables showing activity titles.
 - In-app alerts behind the bell are not presented as phone notifications.
 
-Reliable background delivery needs Web Push from a server, which Luma does not use. `docs/NOTIFICATIONS.md` describes the smallest possible push design, its privacy implications and costs, and the backend-free calendar alternative; none of it is implemented without explicit approval.
+Decision: Luma uses no push server or any other external infrastructure, so it cannot notify while closed. For the fixed schedule, `docs/NOTIFICATIONS.md` describes local iPhone options (Shortcuts time-of-day automations, Calendar events) that the user sets up once on the phone; any in-app integration with them needs explicit approval.
 
 ## 8. External ChatGPT planning and import
 
@@ -183,6 +185,8 @@ Canonical zone `Asia/Jerusalem`. "Today" and "now" use `Intl` with the explicit 
 ## 10. Backup, privacy and security
 
 Full backup `luma-work-backup` (envelope version 1, any known state schema version inside; older versions are migrated on restore). Export via share sheet or download; the export is recorded only after the browser accepted the file. Restore shows the file date and counts, requires explicit replacement confirmation and saves a recovery snapshot first. Foreign, plan and newer files are rejected without changes.
+
+Security guarantees, limitations and the latest audit are in `SECURITY.md`. Notably: all storage is per origin, and the GitHub Pages origin is shared with the owner's other Pages sites (a known limitation); UI preferences in localStorage never contain work text (task search is kept in memory only); the CSP allows no inline scripts or styles and no other origins; the deploy workflow pins Actions to commit SHAs with least-privilege permissions.
 
 All imported content is untrusted: JSON only, no eval, no HTML injection, prototype-pollution keys rejected, bounded sizes. User text is rendered with safe DOM APIs. No telemetry, external fonts, CDNs or network calls at runtime. Store only generic work descriptions and counts - no identifying details of members of the public, case identifiers, email bodies or documents. Local storage is not encryption.
 

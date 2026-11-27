@@ -17,6 +17,7 @@ export function v1Document() {
   const s = createInitialState('2026-11-20T08:00:00.000Z');
   s.metadata.schemaVersion = 1;
   s.metadata.revision = 41;
+  s.settings.displayName = 'דנה';
   delete s.inquiryCounts;
   delete s.settings.routineEndsOn;
   delete s.settings.notifications;

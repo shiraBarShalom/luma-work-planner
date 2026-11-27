@@ -68,6 +68,7 @@ test('existing v1 installations receive the schedule without losing data; migrat
   assert.equal(state.tasks[0].assignedBlock, 'meeting-m1', 'task link follows the meeting');
   assert.equal(state.tasks[0].subtasks.length, 1, 'subtasks preserved');
   assert.equal(state.tasks[0].estimateMinutes, 45);
+  assert.equal(state.settings.displayName, 'דנה', 'a locally stored greeting name is kept');
   const again = migrateState({ ...structuredClone(state), metadata: { ...state.metadata, schemaVersion: 1 } }, { today: '2026-12-10', nowIso: '2026-12-10T08:00:00.000Z' }).state;
   assert.equal(again.calendarBlocks.length, state.calendarBlocks.length, 're-running adds nothing');
   assert.equal(again.settings.routineEndsOn, state.settings.routineEndsOn);
@@ -193,9 +194,10 @@ test('recurrence matcher kinds incl. monthly overflow and every N weeks', () => 
 
 test('header banner boundaries (start-inclusive, end-exclusive, overnight wrap)', async () => {
   const { store } = await makeStore();
-  const st = store.state.settings;
+  const st = { ...store.state.settings, displayName: 'דנה' };
+  assert.equal(headerFor(store.state.settings, 8 * 60).greeting, 'בוקר טוב', 'no name ships with the app');
   assert.equal(headerFor(st, 4 * 60 + 59).image, 'night');
   assert.equal(headerFor(st, 5 * 60).image, 'dawn');
-  assert.equal(headerFor(st, 12 * 60).greeting, 'צהריים טובים, כרמית');
+  assert.equal(headerFor(st, 12 * 60).greeting, 'צהריים טובים, דנה');
   assert.equal(headerFor(st, 0).image, 'night');
 });

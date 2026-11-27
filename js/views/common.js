@@ -5,7 +5,16 @@ import { fmtDM, addDays, isValidDate } from '../dates.js';
 import { PRIORITY_LABEL } from '../data/schema.js';
 
 const CHECK_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
-export const checkBox = (pressed, label, onclick) => h('button.cb', { type: 'button', 'aria-pressed': String(!!pressed), 'aria-label': label, onclick }, h('span.box', { svg: CHECK_SVG }));
+// The list re-renders after every change, so the box that was just checked is remembered
+// briefly and its replacement plays a short completion animation (none with reduced motion).
+let lastChecked = { key: null, at: 0 };
+export function checkBox(pressed, label, onclick, key = null) {
+  const pop = pressed && key && lastChecked.key === key && Date.now() - lastChecked.at < 800;
+  return h('button.cb' + (pop ? '.pop' : ''), {
+    type: 'button', 'aria-pressed': String(!!pressed), 'aria-label': label,
+    onclick: () => { if (!pressed) lastChecked = { key, at: Date.now() }; onclick(); },
+  }, h('span.box', { svg: CHECK_SVG }));
+}
 
 const STATUS_NOTE = { waiting: 'ממתינה לתשובה', deferred: 'נדחתה', canceled: 'בוטלה' };
 
@@ -64,7 +73,7 @@ export function taskRow(t, { date = nowCtx().date, info = null, showDue = true }
   if (t.recurringRuleId) meta.push(h('span.row', ic('repeat', 14), 'חוזרת'));
   const openEditor = async () => (await import('../editors.js')).openTaskEditor(t.virtual ? t : state.tasks.find((x) => x.id === t.id) || t, { date });
   return h('div.item' + (done ? '.done' : ''), { dataset: { taskId: t.id } },
-    checkBox(done, done ? `סימון ״${t.title}״ כלא הושלמה` : `סימון ״${t.title}״ כהושלמה`, () => run('toggleTaskDone', { id: t.id }, { success: done ? 'סומנה כפתוחה' : 'הושלמה' })),
+    checkBox(done, done ? `סימון ״${t.title}״ כלא הושלמה` : `סימון ״${t.title}״ כהושלמה`, () => run('toggleTaskDone', { id: t.id }, { success: done ? 'המשימה סומנה כפתוחה' : 'המשימה הושלמה' }), t.id),
     h('span.prio.' + (t.priority || 'medium'), { title: `עדיפות ${PRIORITY_LABEL[t.priority] || ''}`, 'aria-hidden': 'true' }),
     h('div.body', h('button.link', { type: 'button', onclick: openEditor, 'aria-label': `עריכת ${t.title}` }, h('div.title', t.title), meta.length ? h('div.meta', meta) : null)),
     done ? null : iconBtn('more', `אפשרויות עבור ${t.title}`, () => taskMenu(t, date)));

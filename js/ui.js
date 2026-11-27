@@ -119,6 +119,8 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), selec
  */
 export function openSheet({ title, body, footer, onClose, labelledBy, beforeClose }) {
   const prevFocus = document.activeElement;
+  // A toast would cover the sheet's lower controls; opening a sheet dismisses it.
+  if (toastEl) { toastEl.remove(); toastEl = null; clearTimeout(toastTimer); }
   const titleId = 'sh-' + Math.random().toString(36).slice(2, 8);
   const panel = h('div.sheet', { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': labelledBy || titleId });
   const backdrop = h('div.backdrop', { onclick: (e) => { if (e.target === backdrop) api.close(); } }, panel);
@@ -313,6 +315,27 @@ export function check(label, checked, onchange, attrs = {}) {
   cb.addEventListener('change', () => onchange && onchange(cb.checked));
   return h('label.check', cb, h('span', label));
 }
+/**
+ * Circular progress (restored v1 look: 8px stroke, soft track, rounded arc, "count/target"
+ * in the center). Built with DOM APIs; the arc is full once the target is reached.
+ */
+export function ring(value, target, size = 88, stroke = 8) {
+  const NS = 'http://www.w3.org/2000/svg';
+  const r = (size - stroke) / 2, c = 2 * Math.PI * r;
+  const pct = target ? Math.min(1, value / target) : 0;
+  const svg = document.createElementNS(NS, 'svg');
+  for (const [k, v] of [['width', size], ['height', size], ['viewBox', `0 0 ${size} ${size}`], ['aria-hidden', 'true'], ['focusable', 'false']]) svg.setAttribute(k, String(v));
+  const circle = (cls, extra = {}) => {
+    const el = document.createElementNS(NS, 'circle');
+    for (const [k, v] of Object.entries({ cx: size / 2, cy: size / 2, r, fill: 'none', 'stroke-width': stroke, ...extra })) el.setAttribute(k, String(v));
+    el.setAttribute('class', cls);
+    return el;
+  };
+  svg.append(circle('ring-track'), circle('ring-arc', { 'stroke-linecap': 'round', 'stroke-dasharray': c, 'stroke-dashoffset': c * (1 - pct) }));
+  return h('div.ring', { style: { width: size + 'px', height: size + 'px' }, role: 'img', 'aria-label': target ? `${value} מתוך ${target}` : String(value) },
+    svg, h('span.ring-val', { 'aria-hidden': 'true' }, h('bdi.ltr', target ? `${value}/${target}` : String(value))));
+}
+
 export const empty = (text, iconName = 'checkCircle') => h('div.empty', ic(iconName, 20), h('span', text));
 export function section(title, opts = {}, ...children) {
   const id = 's-' + Math.random().toString(36).slice(2, 8);

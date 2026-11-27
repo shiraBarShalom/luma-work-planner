@@ -100,7 +100,7 @@ await test('home: outside activity hours shows a concise neutral state; overlapp
 await test('header banner + greeting follow Jerusalem time boundaries', async () => {
   const { page, ctx } = await newPage(browser, base, { time: jlm(MON, '07:59') });
   assert.equal(await page.getAttribute('header.hdr', 'data-banner'), 'dawn');
-  assert.match(await page.locator('.greeting').textContent(), /בוקר טוב, כרמית/);
+  assert.equal((await page.locator('.greeting').textContent()).trim(), 'בוקר טוב', 'no name is hardcoded');
   await page.clock.runFor(2 * 60 * 1000);
   await page.waitForFunction(() => document.querySelector('header.hdr')?.dataset.banner === 'day');
   for (const [t, img] of [['12:00', 'day'], ['17:00', 'sunset'], ['20:00', 'night']]) {
@@ -111,23 +111,24 @@ await test('header banner + greeting follow Jerusalem time boundaries', async ()
   await ctx.close();
 });
 
-await test('inquiry counter: plus, minus, never below zero, reset with confirmation, persists', async () => {
+await test('inquiry counter: plus, minus, never below zero, reset with undo, persists', async () => {
   const { page, ctx } = await newPage(browser, base);
-  const value = () => page.locator('.counter-value b').textContent();
+  const value = () => page.locator('.ring-val').textContent().then((t) => t.split('/')[0]);
   assert.equal(await page.getByRole('button', { name: 'הפחתת פנייה' }).isDisabled(), true, 'minus disabled at zero');
   for (let i = 0; i < 3; i++) await page.getByRole('button', { name: 'הוספת פנייה' }).click();
   await page.getByRole('button', { name: 'הפחתת פנייה' }).click();
-  await page.waitForFunction(() => document.querySelector('.counter-value b')?.textContent === '2');
+  await page.waitForFunction(() => document.querySelector('.ring-val')?.textContent.startsWith('2/'));
   await page.reload(); await page.waitForSelector('.counter-value');
   assert.equal(await value(), '2');
   assert.match(await page.locator('.counter-value').textContent(), /\/\s*10/);
   await page.locator('.counter .link-btn').click();
-  await page.locator('.sheet').getByRole('button', { name: 'ביטול' }).click();
-  await page.waitForSelector('.backdrop', { state: 'detached' });
-  assert.equal(await value(), '2', 'canceled reset keeps the count');
+  await page.waitForFunction(() => document.querySelector('.ring-val')?.textContent.startsWith('0/'));
+  assert.equal(await page.locator('.sheet').count(), 0, 'reversible: no confirmation dialog');
+  await page.locator('.toast').getByRole('button', { name: 'ביטול' }).click();
+  await page.waitForFunction(() => document.querySelector('.ring-val')?.textContent.startsWith('2/'));
+  assert.equal(await value(), '2', 'undo restores the count');
   await page.locator('.counter .link-btn').click();
-  await page.locator('.sheet-foot').getByRole('button', { name: 'איפוס' }).click();
-  await page.waitForFunction(() => document.querySelector('.counter-value b')?.textContent === '0');
+  await page.waitForFunction(() => document.querySelector('.ring-val')?.textContent.startsWith('0/'));
   const st = await stateOf(page);
   assert.equal(st.inquiryLogs.length, 0, 'no per-tap records');
   await ctx.close();
@@ -212,13 +213,13 @@ await test('tasks: dedicated add button at the bottom opens the task editor', as
 await test('counter: resets at Jerusalem midnight while open and after days closed; history in Settings collapsed by default', async () => {
   const { page, ctx } = await newPage(browser, base, { time: jlm(MON, '23:58') });
   for (let i = 0; i < 3; i++) await page.getByRole('button', { name: 'הוספת פנייה' }).click();
-  await page.waitForFunction(() => document.querySelector('.counter-value b')?.textContent === '3');
+  await page.waitForFunction(() => document.querySelector('.ring-val')?.textContent.startsWith('3/'));
   await page.clock.runFor(3 * 60 * 1000); // past midnight, app left open
-  await page.waitForFunction(() => document.querySelector('.counter-value b')?.textContent === '0', null, { timeout: 10000 });
+  await page.waitForFunction(() => document.querySelector('.ring-val')?.textContent.startsWith('0/'), null, { timeout: 10000 });
   await page.getByRole('button', { name: 'הוספת פנייה' }).click();
   await page.clock.setSystemTime(jlm('2026-12-04', '09:00')); // closed for days
   await page.reload(); await page.waitForSelector('.counter-value');
-  assert.equal(await page.locator('.counter-value b').textContent(), '0');
+  assert.equal(await page.locator('.ring-val').textContent(), '0/10');
   assert.deepEqual((await stateOf(page)).inquiryCounts, { [MON]: 3, '2026-12-01': 1 }, 'final counts kept, nothing reset twice');
   await go(page, base, '#/settings');
   const details = page.locator('details.history');
@@ -329,6 +330,7 @@ await test('calendar: month navigation and day tap; week and day show only navig
   const { page, ctx } = await newPage(browser, base, { hash: `#/calendar/month/${MON}` });
   await page.getByRole('button', { name: 'החודש הבא' }).click();
   await page.waitForFunction(() => location.hash.includes('2026-12-30'));
+  await page.waitForSelector('.month[aria-label="דצמבר 2026"]');
   assert.equal(await page.getByLabel('חודש', { exact: true }).inputValue(), '12');
   await page.getByRole('button', { name: 'החודש הקודם' }).click();
   await page.waitForFunction(() => location.hash.includes('2026-11-30'));
@@ -401,10 +403,13 @@ await test('plan import via paste: additive with overlap, approve, recurring sch
     tasks: [{ externalId: 't1', title: 'משימה מיובאת', scheduledDate: MON, priority: 'high' }] };
   await page.getByLabel('JSON של התוכנית').fill('```json\n' + JSON.stringify(plan) + '\n```');
   await page.getByRole('button', { name: 'בדיקה' }).click();
-  await page.waitForSelector('.pv-item');
+  await page.waitForSelector('.pv-summary');
+  assert.equal(await page.locator('.pv-summary').textContent(), 'משימה חדשה אחת · פעילות חדשה אחת');
+  assert.equal(await page.locator('details.pv-details').getAttribute('open'), null, 'items collapsed when nothing needs attention');
+  await page.getByText('הצגת הפריטים').click();
   assert.match(await page.locator('.pv-item').first().textContent(), /במקביל ל-״מענה לטלפונים/);
   await page.waitForFunction(() => !document.querySelector('button.btn.primary.block')?.disabled);
-  await page.getByRole('button', { name: 'אישור וייבוא' }).click();
+  await page.getByRole('button', { name: 'ייבוא', exact: true }).click();
   await page.waitForSelector('text=הייבוא הושלם');
   await page.getByLabel('JSON של התוכנית').fill(JSON.stringify(plan));
   await page.getByRole('button', { name: 'בדיקה' }).click();
@@ -448,6 +453,176 @@ await test('backup export → restore round trip with confirmation; foreign file
   await page.waitForSelector('text=הגיבוי שוחזר');
   await go(page, base, '#/tasks/today', '[data-section="today"]');
   assert.deepEqual(await sectionTitles(page, 'today'), ['משימה לגיבוי']);
+  await ctx.close();
+});
+
+/** Synthetic one-finger swipe (Touch events) from (x0, y0) by (dx, dy) on an element. */
+async function swipe(page, selector, { x0 = null, y0 = null, dx = 0, dy = 0, during = null } = {}) {
+  await page.evaluate(async ({ selector, x0, y0, dx, dy, during }) => {
+    const el = document.querySelector(selector);
+    const r = el.getBoundingClientRect();
+    const sx = x0 ?? r.left + r.width / 2, sy = y0 ?? r.top + Math.min(r.height / 2, 200);
+    const target = document.elementFromPoint(sx, sy) || el;
+    const touch = (x, y) => new Touch({ identifier: 1, target, clientX: x, clientY: y, pageX: x, pageY: y });
+    const fire = (type, t) => target.dispatchEvent(new TouchEvent(type, { touches: type === 'touchend' ? [] : [t], changedTouches: [t], bubbles: true, cancelable: true }));
+    fire('touchstart', touch(sx, sy));
+    if (during === 'scrollGrid') { const g = document.querySelector('.tg'); g.scrollLeft = g.scrollLeft - 40; }
+    fire('touchmove', touch(sx + dx / 2, sy + dy / 2));
+    fire('touchend', touch(sx + dx, sy + dy));
+  }, { selector, x0, y0, dx, dy, during });
+  await page.waitForTimeout(120);
+}
+
+await test('agenda: current activities highlighted with "עכשיו" (all of them when overlapping); completed muted; follows the clock', async () => {
+  const { page, ctx } = await newPage(browser, base, { time: jlm(MON, '10:20'), hash: `#/agenda/${MON}` });
+  await dispatch(page, 'addBlock', { date: MON, start: '10:00', end: '11:00', title: 'ישיבת צוות' });
+  await dispatch(page, 'setBlockStatus', { occId: `default-opening@${MON}`, status: 'done' });
+  await page.getByRole('radio', { name: 'רשימה' }).click();
+  await page.waitForSelector('.tl-card.current');
+  assert.deepEqual(await page.locator('.tl-card.current .title').allTextContents(), ['מענה לטלפונים ולפניות ב-CRM', 'ישיבת צוות']);
+  assert.equal(await page.locator('.tl-card.current .now-chip').count(), 2);
+  assert.equal(await page.locator('.now-chip').count(), 2, 'only current activities carry the label');
+  const done = page.locator('.tl-card.done .title').first();
+  assert.equal(await done.evaluate((e) => getComputedStyle(e).textDecorationLine), 'none', 'completed stays readable');
+  assert.notEqual(await done.evaluate((e) => getComputedStyle(e).color), await page.locator('.tl-card:not(.done) .title').first().evaluate((e) => getComputedStyle(e).color), 'completed is muted');
+  await page.clock.runFor(3 * 60 * 60 * 1000); // 13:20, app left open
+  await page.waitForFunction(() => [...document.querySelectorAll('.tl-card.current .title')].map((e) => e.textContent).join() === 'הפסקה', null, { timeout: 10000 });
+  await ctx.close();
+});
+
+await test('undo: completing, skipping, canceling and deleting restore the same record without duplicates; toast stays above the navigation', async () => {
+  const { page, ctx } = await newPage(browser, base, { time: jlm(MON, '10:20'), hash: '#/tasks/today' });
+  const tid = await dispatch(page, 'addTask', { title: 'משימה לבדיקת ביטול', scheduledDate: MON });
+  await page.reload(); await page.waitForSelector('[data-section="today"] .item');
+  const undo = async () => { await page.locator('.toast').getByRole('button', { name: 'ביטול' }).click(); await page.waitForSelector('text=בוטל'); };
+  // Complete task -> undo.
+  await page.locator('[data-section="today"] .cb').first().click();
+  await page.waitForSelector('.toast:has-text("המשימה הושלמה")');
+  const toast = await page.locator('.toast').boundingBox(), nav = await page.locator('nav.nav').boundingBox();
+  assert.ok(toast.y + toast.height <= nav.y, 'toast above the bottom navigation');
+  await undo();
+  let st = await stateOf(page);
+  assert.deepEqual(st.tasks.map((t) => [t.id, t.status]), [[tid, 'todo']]);
+  // Delete task from the editor: no confirmation, undo restores the same record.
+  await page.locator('[data-section="today"] button.link').first().click();
+  await page.locator('.sheet-foot').getByRole('button', { name: 'מחיקה' }).click();
+  await page.waitForSelector('.toast:has-text("המשימה נמחקה")');
+  assert.equal((await stateOf(page)).tasks.length, 0);
+  await undo();
+  st = await stateOf(page);
+  assert.deepEqual(st.tasks.map((t) => t.id), [tid], 'same ID, no duplicate');
+  // Activities: complete, skip, cancel -> undo each.
+  await go(page, base, `#/agenda/${MON}`);
+  await page.getByRole('radio', { name: 'רשימה' }).click();
+  const occ = `default-team@${MON}`;
+  await page.getByRole('button', { name: 'סימון ״זמן קבלה לשאלות של הצוות״ כהושלם' }).click();
+  await page.waitForSelector('.toast:has-text("הפעילות הושלמה")');
+  await undo();
+  assert.equal((await stateOf(page)).blockCompletions[occ], undefined);
+  for (const [label, msg] of [['דילוג', 'הפעילות דולגה'], ['ביטול הפעילות', 'הפעילות בוטלה']]) {
+    await page.getByRole('button', { name: 'פעולות עבור זמן קבלה לשאלות של הצוות' }).click();
+    await page.locator('.choice', { hasText: label }).click();
+    await page.waitForSelector(`.toast:has-text("${msg}")`);
+    await undo();
+    assert.equal((await stateOf(page)).blockCompletions[occ], undefined, label);
+  }
+  // Delete a one-off activity: undo restores it.
+  const bid = await dispatch(page, 'addBlock', { date: MON, start: '17:00', end: '17:30', title: 'פעילות למחיקה' });
+  await page.reload(); await page.waitForSelector('.tl-card');
+  await page.getByRole('button', { name: 'פעולות עבור פעילות למחיקה' }).click();
+  await page.locator('.choice', { hasText: 'עריכה' }).click();
+  await page.locator('.sheet-foot').getByRole('button', { name: 'מחיקה' }).click();
+  await page.waitForSelector('.toast:has-text("הפעילות נמחקה")');
+  await undo();
+  st = await stateOf(page);
+  assert.deepEqual(st.calendarBlocks.filter((b) => b.title === 'פעילות למחיקה').map((b) => b.id), [bid]);
+  assert.equal(st.calendarBlocks.filter((b) => b.id.startsWith('default-')).length, 8, 'schedule intact');
+  await ctx.close();
+});
+
+await test('swipe: right = next, left = previous (RTL) in agenda and calendar; no navigation from drags, vertical moves, edges or a scrolled grid', async () => {
+  const { page, ctx } = await newPage(browser, base, { time: jlm(MON, '10:20'), hash: `#/agenda/${MON}` });
+  const hash = () => page.evaluate(() => location.hash);
+  await page.getByRole('radio', { name: 'רשימה' }).click();
+  await swipe(page, '.timeline', { dx: 120 });
+  assert.equal(await hash(), '#/agenda/2026-12-01');
+  await swipe(page, '.timeline', { dx: -120 });
+  assert.equal(await hash(), `#/agenda/${MON}`);
+  await swipe(page, '.timeline', { dx: 40, dy: 160 });
+  assert.equal(await hash(), `#/agenda/${MON}`, 'vertical scroll is not a swipe');
+  await swipe(page, '.timeline', { x0: 8, dx: 150 });
+  assert.equal(await hash(), `#/agenda/${MON}`, 'edge gestures are left to iOS');
+  await page.getByRole('radio', { name: 'ציר שעות' }).click();
+  await swipe(page, '.tg-blk', { dx: 120 });
+  assert.equal(await hash(), `#/agenda/${MON}`, 'touching an activity never navigates');
+  await go(page, base, `#/calendar/month/${MON}`);
+  await swipe(page, '.month', { dx: 140 });
+  assert.match(await hash(), /#\/calendar\/month\/2026-12-30/);
+  await go(page, base, '#/calendar/week/2026-11-29', '.tg');
+  await swipe(page, '.tg-head', { dx: -140, during: 'scrollGrid' });
+  assert.equal(await hash(), '#/calendar/week/2026-11-29', 'a swipe that scrolls the grid stays on the week');
+  await swipe(page, '.tg-head', { dx: -140 });
+  assert.equal(await hash(), '#/calendar/week/2026-11-22');
+  await go(page, base, `#/calendar/day/${MON}`, '.tg');
+  await swipe(page, '.datenav', { dx: 140 });
+  assert.equal(await hash(), '#/calendar/day/2026-12-01');
+  await ctx.close();
+});
+
+await test('ring counter, remembered modes, kept scroll position, reduced motion', async () => {
+  const { page, ctx } = await newPage(browser, base, { time: jlm(MON, '10:20') });
+  for (let i = 0; i < 3; i++) await page.getByRole('button', { name: 'הוספת פנייה' }).click();
+  await page.waitForFunction(() => document.querySelector('.ring-val')?.textContent === '3/10');
+  assert.equal(await page.locator('.counter .ring').getAttribute('aria-label'), '3 מתוך 10');
+  const off = await page.locator('.ring-arc').evaluate((e) => [Number(e.getAttribute('stroke-dasharray')), Number(e.getAttribute('stroke-dashoffset'))]);
+  assert.ok(Math.abs(off[1] / off[0] - 0.7) < 0.001, 'arc shows 30%');
+  assert.equal(await page.locator('.counter .progress').count(), 0, 'no bar besides the ring');
+  // Calendar tab reopens the last mode; agenda keeps its mode.
+  await go(page, base, '#/calendar/week');
+  await page.locator('nav.nav a[data-nav="home"]').click(); await page.waitForSelector('.page.home');
+  await page.locator('nav.nav a[data-nav="calendar"]').click();
+  await page.waitForFunction(() => location.hash.startsWith('#/calendar/week'));
+  // Scroll position survives completing a task.
+  for (let i = 0; i < 25; i++) await dispatch(page, 'addTask', { title: `משימה ${i}`, scheduledDate: MON });
+  await go(page, base, '#/tasks/today', '[data-section="today"]');
+  await page.evaluate(() => window.scrollTo(0, 900));
+  const y0 = await page.evaluate(() => window.scrollY);
+  await page.locator('[data-section="today"] .cb').nth(12).click();
+  await page.waitForSelector('.toast');
+  assert.ok(Math.abs((await page.evaluate(() => window.scrollY)) - y0) < 4, 'scroll kept');
+  await ctx.close();
+  const reduced = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+  const rp = await reduced.newPage();
+  await rp.goto(base + '#/home'); await rp.waitForSelector('.page');
+  await rp.goto(base + '#/tasks/today'); await rp.waitForSelector('.page.enter');
+  assert.equal(await rp.locator('.page.enter').evaluate((e) => getComputedStyle(e).animationName), 'none');
+  await reduced.close();
+});
+
+await test('security: hostile text from an import renders as text; search never reaches localStorage; retired keys purged', async () => {
+  const { page, ctx, errors } = await newPage(browser, base, { hash: '#/import' });
+  await page.addInitScript(() => { window.__pwned = 0; });
+  await page.evaluate(() => { localStorage.setItem('luma-work-planner:ui', JSON.stringify({ taskSearch: 'old private query', taskSort: 'low' })); });
+  const evil = '<img src=x onerror="window.__pwned=1">';
+  const plan = { format: 'luma-work-plan', schemaVersion: 2, kind: 'dailyPatch', planId: 'xss', activities: [{ externalId: 'a', title: evil, date: MON, start: '15:00', end: '15:30', notes: '<script>window.__pwned=2</script>' }], tasks: [{ externalId: 't', title: evil, scheduledDate: MON, notes: '<svg onload="window.__pwned=3">' }] };
+  await page.getByLabel('JSON של התוכנית').fill(JSON.stringify(plan));
+  await page.getByRole('button', { name: 'בדיקה' }).click();
+  await page.waitForSelector('.pv-summary');
+  await page.getByRole('button', { name: 'ייבוא', exact: true }).click();
+  await page.waitForSelector('text=הייבוא הושלם');
+  for (const h of [`#/agenda/${MON}`, '#/tasks/today', '#/home']) { await page.reload(); await go(page, base, h); }
+  await go(page, base, `#/agenda/${MON}`);
+  await page.getByRole('radio', { name: 'רשימה' }).click();
+  assert.ok((await page.locator('.tl-card .title').allTextContents()).includes(evil), 'shown literally');
+  await go(page, base, '#/tasks/today', '[data-section="today"]');
+  assert.deepEqual(await sectionTitles(page, 'today'), [evil]);
+  assert.equal(await page.evaluate(() => document.querySelectorAll('main img, main script, main svg[onload]').length), 0, 'no injected elements');
+  assert.equal(await page.evaluate(() => window.__pwned), 0, 'no script ran');
+  await page.getByLabel('חיפוש במשימות').fill('מילה פרטית');
+  const ls = await page.evaluate(() => JSON.stringify(localStorage));
+  assert.doesNotMatch(ls, /מילה פרטית|old private query|taskSearch/);
+  assert.match(ls, /taskSort/, 'harmless view preferences remain');
+  assert.deepEqual(errors, [], JSON.stringify(errors));
   await ctx.close();
 });
 
@@ -554,7 +729,7 @@ await test('two tabs: a tab without local edits picks up the other tab\'s change
   await a.goto(base + '#/home'); await a.waitForSelector('.counter-value');
   await b.goto(base + '#/home'); await b.waitForSelector('.counter-value');
   await a.getByRole('button', { name: 'הוספת פנייה' }).click();
-  await b.waitForFunction(() => document.querySelector('.counter-value b')?.textContent === '1', null, { timeout: 5000 });
+  await b.waitForFunction(() => document.querySelector('.ring-val')?.textContent.startsWith('1/'), null, { timeout: 5000 });
   await ctx.close();
 });
 
@@ -573,6 +748,7 @@ async function layoutChecks(engineName, br, width) {
     const page = await ctx.newPage();
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
+    await page.addInitScript(() => { window.__csp = []; document.addEventListener('securitypolicyviolation', (e) => window.__csp.push(`${e.violatedDirective} ${e.blockedURI}`)); });
     await page.clock.install({ time: jlm(MON, '10:20') });
     await page.goto(base + '#/home'); await page.waitForSelector('.page');
     await dispatch(page, 'addTask', { title: 'משימה עם כותרת ארוכה במיוחד כדי לבדוק שבירת שורות במסך צר', scheduledDate: MON, deadline: '2026-12-03' });
@@ -591,6 +767,7 @@ async function layoutChecks(engineName, br, width) {
       assert.equal(res.bad, false, `${r}: null/undefined text`);
       assert.equal(res.dash, false, `${r}: em dash, en dash or maqaf in visible text`);
       assert.equal(res.ctl, null, `${r}: control without touch-action`);
+      assert.deepEqual(await page.evaluate(() => window.__csp), [], `${r}: Content-Security-Policy violation`);
     }
     // Both editors: every field stays inside the sheet; inputs use ≥16px text (no focus zoom).
     for (const [hash, open] of [[`#/agenda/${MON}`, async () => { await page.getByRole('radio', { name: 'ציר שעות' }).click(); await page.getByRole('button', { name: 'הוספת פעילות' }).click(); }],
