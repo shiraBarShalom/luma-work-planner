@@ -27,7 +27,7 @@ export function createIdbAdapter(idb = globalThis.indexedDB) {
   let dbp = null;
   let blockedHandler = null;
   const open = () => {
-    if (!idb) return Promise.reject(new StorageError('unsupported', 'הדפדפן אינו תומך ב־IndexedDB'));
+    if (!idb) return Promise.reject(new StorageError('unsupported', 'הדפדפן אינו תומך ב-IndexedDB'));
     if (!dbp) {
       dbp = new Promise((resolve, reject) => {
         let req;

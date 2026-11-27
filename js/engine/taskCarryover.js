@@ -6,7 +6,7 @@ import { addDays, diffDays, weekStart } from '../dates.js';
 import { LIMITS } from '../config.js';
 import { PRIORITY_RANK } from '../data/schema.js';
 import { memo } from './cache.js';
-import { dayInfoFor, workdaysBetween, isWorkday } from './dayTemplates.js';
+import { dayInfoFor, workdaysBetween } from './dayTemplates.js';
 import { matchesRecurrence } from './recurrence.js';
 
 export const ACTIVE_STATUSES = new Set(['todo', 'inProgress']);
@@ -200,10 +200,11 @@ export function openDeadlines(state) {
   return state.tasks.filter((t) => t.deadline && (ACTIVE_STATUSES.has(t.status) || t.status === 'deferred' || t.status === 'waiting'));
 }
 
-/** Count of open items a date shows: carried + today's open. */
-export function openCountFor(state, date) {
-  return carriedTasks(state, date).length + todaysTasks(state, date).filter((t) => t.status !== 'done').length;
+/**
+ * Stable priority sort ('high' = high→low, 'low' = low→high). Items keep their existing
+ * (date) order within the same priority. Accepts tasks or carryover items ({task}).
+ */
+export function sortByPriority(list, dir = 'high') {
+  const rank = (x) => PRIORITY_RANK[(x.task || x).priority] ?? 1;
+  return list.map((x, i) => [x, i]).sort((a, b) => (dir === 'low' ? rank(b[0]) - rank(a[0]) : rank(a[0]) - rank(b[0])) || a[1] - b[1]).map((p) => p[0]);
 }
-
-export const isRoutineTask = (state, t) => !!(t.recurringRuleId && state.recurringRules.find((r) => r.id === t.recurringRuleId)?.routine);
-export const workdayFlag = isWorkday;

@@ -4,128 +4,62 @@
   "locale": "he-IL",
   "direction": "rtl",
   "designSystem": "00-design-system.json",
-  "source": {},
-  "visualReference": {
-    "observed": [
-      "Reference uses a left-hand vertical line, right-side times, blue active row and subdued completed rows.",
-      "Reference shows 08:00 arrival, opening meeting, 14:00 team meeting and other noncanonical times."
-    ],
-    "exampleDataOnly": true
-  },
+  "exampleDataOnly": true,
   "layout": {
     "headerVariant": "secondary",
-    "scroll": "vertical",
-    "navigation": "shared bottom navigation",
     "activeTab": "agenda",
     "components": [
       {
-        "id": "date",
-        "type": "dateNavigator",
-        "actions": [
-          "previousDay",
-          "nextDay",
-          "selectDate"
+        "id": "dateNav",
+        "type": "dateNavigation",
+        "sample": "יום שני, 30 בנובמבר",
+        "rules": "arrows on both sides; tapping the date opens the native picker; optional small היום button when another date is shown"
+      },
+      {
+        "id": "mode",
+        "type": "segmented",
+        "options": [
+          "רשימה",
+          "ציר שעות"
         ]
       },
       {
-        "id": "duty",
-        "type": "overlappingDutyStrip",
-        "label": "תורנות טלפון",
-        "start": "09:00",
-        "end": "12:00"
+        "id": "list",
+        "type": "activityCards",
+        "card": [
+          "start-end",
+          "title",
+          "short note (max two lines)",
+          "completion checkbox",
+          "⋯ menu: הושלם חלקית, דילוג, ביטול הפעילות, עריכה"
+        ],
+        "states": [
+          "current (soft blue)",
+          "done (struck)",
+          "partial/skipped/canceled (small status line)"
+        ]
       },
       {
         "id": "timeline",
-        "type": "verticalTimeline",
-        "items": [
-          {
-            "start": "09:00",
-            "end": "09:15",
-            "title": "פתיחת יום ובחירת שלוש משימות",
-            "icon": "list-checks"
-          },
-          {
-            "start": "09:15",
-            "end": "12:00",
-            "title": "טיפול בפניות",
-            "icon": "headset"
-          },
-          {
-            "start": "12:00",
-            "end": "13:00",
-            "title": "בלוק מייל ראשון",
-            "icon": "mail"
-          },
-          {
-            "start": "13:00",
-            "end": "14:00",
-            "title": "הפסקה",
-            "icon": "coffee"
-          },
-          {
-            "start": "14:00",
-            "end": "14:15",
-            "title": "שעת קבלת צוות",
-            "icon": "users"
-          },
-          {
-            "start": "14:15",
-            "end": "15:30",
-            "title": "השלמת פניות ומסמכים",
-            "icon": "file-text"
-          },
-          {
-            "start": "15:30",
-            "end": "16:00",
-            "title": "בלוק מייל שני",
-            "icon": "mail"
-          },
-          {
-            "start": "16:00",
-            "end": "16:30",
-            "title": "סגירת יום",
-            "icon": "check-circle"
-          }
-        ],
-        "states": [
-          "current",
-          "future",
-          "completed",
-          "partial",
-          "overrun",
-          "cancelled",
-          "hasOpenTasks"
-        ],
-        "actions": [
-          "complete",
-          "edit",
-          "drag",
-          "resize",
-          "addTask",
-          "openFocus"
-        ]
+        "type": "hourGrid",
+        "rules": "single day, no header row; overlapping activities in side-by-side lanes; tap to edit; long-press/drag to move; bottom handle to resize; Alt+arrows on keyboard",
+        "after": "הוספת פעילות button"
       },
       {
-        "id": "add",
-        "type": "primaryButton",
-        "label": "הוספת פעילות",
-        "action": "openActivitySheet"
-      },
-      {
-        "id": "tools",
-        "type": "quickActions",
-        "items": [
-          "תורנויות",
-          "משימות מהיום",
-          "עריכת סדר יום"
-        ]
+        "id": "notes",
+        "type": "textarea",
+        "placeholder": "הערות",
+        "rules": "one field for the day, shared by both modes, saved when left"
       }
     ]
   },
-  "implementationNotes": [
-    "Use canonical schedule from original user brief, not invented mockup times.",
-    "Phone duty is concurrent with agenda; Thursday is remote with same format.",
-    "Team meetings are added only as needed.",
-    "All times editable; allow conflicts to be reviewed."
+  "excluded": [
+    "Hebrew date",
+    "duty strip",
+    "workday labels",
+    "delay/planner/move/export/print buttons",
+    "achievements",
+    "reflection",
+    "instructions"
   ]
 }

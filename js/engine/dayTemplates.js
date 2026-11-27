@@ -1,4 +1,6 @@
-// Effective day computation and lazy routine-block generation.
+// Effective day computation and lazy generation of legacy routine-template blocks.
+// Since schema v2 the weekly schedule is made of ordinary recurring activities; legacy
+// templates only render days before `settings.routineEndsOn`, so history is preserved.
 // Precedence: work-calendar defaults -> applicable versioned template -> week override ->
 // date override. Location, phone duty and hours are independent fields. Template versions
 // carry effective dates, so editing a template never rewrites past days.
@@ -56,36 +58,11 @@ export function effectiveDay(state, date) {
   return eff;
 }
 
-/** The day as it would be without its date-specific override (defaults + week override). */
-export function baseDay(state, date) {
-  if (!state.dayOverrides[date]) return effectiveDay(state, date);
-  const { [date]: _omit, ...rest } = state.dayOverrides;
-  return effectiveDay({ ...state, dayOverrides: rest }, date);
-}
-
 export const isWorkday = (state, date) => effectiveDay(state, date).isWorking;
 
 /** dayInfo adapter for recurrence matching. */
 export const dayInfoFor = (state) => (date) => effectiveDay(state, date);
 
-export function nextWorkday(state, date, maxDays = 60) {
-  for (let i = 1; i <= maxDays; i++) {
-    const d = addDays(date, i);
-    if (isWorkday(state, d)) return d;
-  }
-  return null;
-}
-export function prevWorkday(state, date, maxDays = 60) {
-  for (let i = 1; i <= maxDays; i++) {
-    const d = addDays(date, -i);
-    if (isWorkday(state, d)) return d;
-  }
-  return null;
-}
-/** Today if it is a workday, else the next configured workday. */
-export function currentOrNextWorkday(state, date) {
-  return isWorkday(state, date) ? date : nextWorkday(state, date);
-}
 export function workdaysBetween(state, from, to) {
   // Count of workdays d with from < d <= to.
   let n = 0;
@@ -119,7 +96,8 @@ export function routineBlocks(state, date) {
   if (hit) return hit;
   const eff = effectiveDay(state, date);
   const res = { blocks: [], suppressed: [], templateId: eff.templateId, versionId: null };
-  if (!eff.isWorking) { c.routine.set(date, res); return res; }
+  const endsOn = state.settings.routineEndsOn;
+  if (!eff.isWorking || (endsOn && date >= endsOn)) { c.routine.set(date, res); return res; }
   const tpl = findTemplate(state, eff.templateId);
   const ver = templateVersionFor(state, eff.templateId, date);
   if (!tpl || !ver) { c.routine.set(date, res); return res; }
@@ -153,14 +131,4 @@ export function routineBlocks(state, date) {
   }
   c.routine.set(date, res);
   return res;
-}
-
-/** The closing window derived from the effective schedule (never a hard-coded hour). */
-export function closingWindow(state, date) {
-  const eff = effectiveDay(state, date);
-  if (!eff.isWorking) return null;
-  const rb = routineBlocks(state, date).blocks.find((b) => b.role === 'closing');
-  if (rb) return { start: rb.start, end: rb.end };
-  const e = toMin(eff.workEnd);
-  return { start: fromMin(Math.max(toMin(eff.workStart), e - 30)), end: eff.workEnd };
 }

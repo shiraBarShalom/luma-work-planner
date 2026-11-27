@@ -1,11 +1,12 @@
 // Interactive hourly grid for week/day calendars. Blocks can be tapped (edit sheet),
 // dragged (long-press on touch, pointer drag on desktop, also across days), resized from
 // the visible bottom handle, or moved with Alt+Arrow (Alt+Shift+Arrow resizes).
+// Simultaneous activities are laid out side by side in lanes, each independently editable.
 // Every change is committed through the same store command as the edit sheet.
 import { h } from './ui.js';
-import { toMin, fromMin, DAY_SHORT, fmtShort, weekday } from './dates.js';
+import { fromMin, DAY_SHORT, fmtShort, weekday } from './dates.js';
 import { dayOccurrences } from './engine/schedule.js';
-import { effectiveDay } from './engine/dayTemplates.js';
+import { BLOCK_STATUS_LABEL } from './data/schema.js';
 
 const SNAP = 15;
 
@@ -34,45 +35,38 @@ function lanes(occs) {
 
 export function timeGrid(state, days, { today, nowMinute, onTap, onEmpty, onChange, ppm = 1.0667 } = {}) {
   const all = days.map((d) => dayOccurrences(state, d));
-  const effs = days.map((d) => effectiveDay(state, d));
   let start = 8 * 60, end = 17 * 60;
-  for (const e of effs) if (e.isWorking) { start = Math.min(start, toMin(e.workStart) - 60); end = Math.max(end, toMin(e.workEnd) + 30); }
   for (const list of all) for (const o of list) { start = Math.min(start, Math.floor(o.s / 60) * 60); end = Math.max(end, Math.ceil(o.e / 60) * 60); }
   start = Math.max(0, Math.floor(start / 60) * 60);
   end = Math.min(24 * 60, Math.ceil(end / 60) * 60);
   const height = (end - start) * ppm;
   const catColor = (id) => state.settings.categories.find((c) => c.id === id)?.color || '#526273';
   const root = h('div.tg', { style: { '--days': String(days.length), '--hour': `${60 * ppm}px` }, role: 'group', 'aria-label': 'לוח שעות' });
-  root.append(h('div.tg-head', h('div'), days.map((d, i) => {
-    const e = effs[i];
-    const tags = [];
-    if (!e.isWorking) tags.push('לא יום עבודה');
-    else { tags.push(e.location === 'home' ? 'בית' : e.location === 'office' ? 'משרד' : 'אחר'); if (e.phoneDuty) tags.push('תורנות'); }
-    return h('a.tg-dh' + (d === today ? '.today' : '') + (!e.isWorking ? '.off' : ''), { href: `#/agenda/${d}`, 'aria-label': `יום ${DAY_SHORT[weekday(d)]} ${fmtShort(d)}${d === today ? ', היום' : ''}` },
-      h('span', DAY_SHORT[weekday(d)]), h('b', fmtShort(d)), h('span.tags', tags.map((t) => h('span', t))));
-  })));
+  // A single day is already named by the date navigation above it; only weeks get a header row.
+  if (days.length > 1) root.append(h('div.tg-head', h('div'), days.map((d) => h('a.tg-dh' + (d === today ? '.today' : ''), { href: `#/agenda/${d}`, 'aria-label': `יום ${DAY_SHORT[weekday(d)]} ${fmtShort(d)}${d === today ? ', היום' : ''}` },
+    h('span', DAY_SHORT[weekday(d)]), h('b', fmtShort(d))))));
+  else root.classList.add('single');
   const hoursCol = h('div.tg-hours', { style: { height: height + 'px' }, 'aria-hidden': 'true' });
   for (let m = start + 60; m < end; m += 60) hoursCol.append(h('span', { style: { top: (m - start) * ppm + 'px' } }, fromMin(m)));
   const body = h('div.tg-body', hoursCol);
   const cols = [];
   days.forEach((d, i) => {
-    const e = effs[i];
-    const col = h('div.tg-col' + (!e.isWorking ? '.off' : ''), { dataset: { date: d }, style: { height: height + 'px', backgroundPosition: `0 ${(60 - (start % 60)) % 60 * ppm}px` } });
-    if (e.phoneDuty) col.append(h('div.tg-duty', { title: `תורנות טלפון ${e.phoneStart}–${e.phoneEnd}`, style: { top: (toMin(e.phoneStart) - start) * ppm + 'px', height: (toMin(e.phoneEnd) - toMin(e.phoneStart)) * ppm + 'px' } }));
+    const col = h('div.tg-col', { dataset: { date: d }, style: { height: height + 'px', backgroundPosition: `0 ${(60 - (start % 60)) % 60 * ppm}px` } });
     const L = lanes(all[i]);
     for (const o of all[i]) {
       const { lane, count } = L.get(o.id);
       const len = o.e - o.s;
       const draggable = onChange && o.status !== 'done';
-      const blk = h('button.tg-blk' + (o.status !== 'planned' ? '.' + o.status : '') + (o.conflicts.length ? '.conflict' : '') + (o.kind === 'meeting' ? '.meeting' : ''), {
+      const blk = h('button.tg-blk' + (o.status !== 'planned' ? '.' + o.status : '') + (count > 1 ? '.lane' : ''), {
         type: 'button',
         dataset: { id: o.id, s: o.s, e: o.e, drag: draggable ? '1' : '' },
-        'aria-label': `${o.title}, ${o.start} עד ${o.end}${o.status !== 'planned' ? ', ' + o.status : ''}${o.conflicts.length ? ', חופף לפעילות אחרת' : ''}. ${draggable ? 'Alt וחצים להזזה, Alt+Shift לשינוי משך' : ''}`,
+        'aria-label': `${o.title}, ${o.start} עד ${o.end}${o.status !== 'planned' ? ', ' + BLOCK_STATUS_LABEL[o.status] : ''}`,
+        'aria-keyshortcuts': draggable ? 'Alt+ArrowUp Alt+ArrowDown Alt+Shift+ArrowUp Alt+Shift+ArrowDown' : null,
         style: {
           top: (o.s - start) * ppm + 'px', height: Math.max(len * ppm - 2, 18) + 'px',
           insetInlineStart: `calc(${(lane / count) * 100}% + 2px)`, width: `calc(${100 / count}% - 6px)`, '--c': catColor(o.categoryId),
         },
-      }, h('span.t', o.title), len * ppm >= 36 ? h('span.m', h('bdi', `${o.start}–${o.end}`)) : null, draggable && len * ppm >= 30 ? h('span.tg-rs', { 'aria-hidden': 'true' }) : null);
+      }, h('span.t', o.title), len * ppm >= 36 ? h('span.m', h('bdi', `${o.start}-${o.end}`)) : null, draggable && len * ppm >= 30 ? h('span.tg-rs', { 'aria-hidden': 'true' }) : null);
       col.append(blk);
     }
     if (d === today && nowMinute >= start && nowMinute <= end) col.append(h('div.tg-now', { style: { top: (nowMinute - start) * ppm + 'px' } }));
@@ -137,7 +131,7 @@ export function timeGrid(state, days, { today, nowMinute, onTap, onEmpty, onChan
       if (c && c.dataset.date !== st.date) { st.date = c.dataset.date; c.append(st.blk); st.blk.style.insetInlineStart = '2px'; st.blk.style.width = 'calc(100% - 6px)'; }
     }
     const m = st.blk.querySelector('.m bdi');
-    if (m) m.textContent = `${fromMin(st.ns)}–${fromMin(st.ne)}`;
+    if (m) m.textContent = `${fromMin(st.ns)}-${fromMin(st.ne)}`;
   });
   root.addEventListener('pointerup', () => finish(true));
   root.addEventListener('pointercancel', () => finish(false));

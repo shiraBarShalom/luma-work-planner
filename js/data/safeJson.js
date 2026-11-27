@@ -37,7 +37,7 @@ function checkTree(root, maxDepth) {
   const stack = [[root, 0]];
   while (stack.length) {
     const [v, d] = stack.pop();
-    if (d > maxDepth) throw new SafeJsonError('too-deep', 'מבנה ה־JSON עמוק מדי');
+    if (d > maxDepth) throw new SafeJsonError('too-deep', 'מבנה ה-JSON עמוק מדי');
     if (v && typeof v === 'object') {
       if (Array.isArray(v)) { for (const x of v) stack.push([x, d + 1]); continue; }
       for (const k of Object.keys(v)) {

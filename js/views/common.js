@@ -1,102 +1,91 @@
-// Shared view components.
-import { h, ic, ltr, iconBtn, choose, promptText, empty, toast, confirmDialog } from '../ui.js';
+// Shared view components: the canonical task row and its menu, and date navigation.
+import { h, ic, ltr, iconBtn, choose, empty, openSheet, btn, field, dateInput, confirmDialog } from '../ui.js';
 import { S, run, nowCtx } from '../app.js';
-import { fmtDM, addDays, relDay, isValidDate } from '../dates.js';
-import { PRIORITY_LABEL, TASK_STATUS_LABEL } from '../data/schema.js';
-import { nextWorkday } from '../engine/dayTemplates.js';
-import { firstFreeSlot } from '../engine/planner.js';
+import { fmtDM, addDays, isValidDate } from '../dates.js';
+import { PRIORITY_LABEL } from '../data/schema.js';
 
-export function category(state, id) {
-  return state.settings.categories.find((c) => c.id === id) || { id, label: 'כללי', color: '#526273' };
-}
-export function catChip(state, id) {
-  const c = category(state, id);
-  return h('span.chip.dot', { style: { '--c': c.color } }, c.label);
-}
+const CHECK_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
+export const checkBox = (pressed, label, onclick) => h('button.cb', { type: 'button', 'aria-pressed': String(!!pressed), 'aria-label': label, onclick }, h('span.box', { svg: CHECK_SVG }));
+
+const STATUS_NOTE = { waiting: 'ממתינה לתשובה', deferred: 'נדחתה', canceled: 'בוטלה' };
 
 /** Date picker sheet → ISO date or null. */
-export async function pickDate(title, value) {
-  const v = await promptText(title, { type: 'date', value: value || nowCtx().date, ok: 'בחירה' });
-  return v && isValidDate(v) ? v : null;
+export function pickDate(title, value) {
+  return new Promise((resolve) => {
+    let res = null;
+    const d = dateInput(value || nowCtx().date, { label: title });
+    const sh = openSheet({
+      title, onClose: () => resolve(res), body: [field('תאריך', d)],
+      footer: [btn('בחירה', () => { if (isValidDate(d.value)) { res = d.value; sh.close(true); } }, 'primary')],
+    });
+  });
 }
 
-/** Reschedule / status menu for a task (real id or virtual recurring key). */
+/** Actions for a task (real id or virtual recurring occurrence). */
 export async function taskMenu(t, date = nowCtx().date) {
-  const state = S();
-  const next = nextWorkday(state, date);
+  const open = t.status === 'todo' || t.status === 'inProgress';
+  const tomorrow = addDays(date, 1);
   const v = await choose(t.title, [
-    { value: 'today', label: 'לבצע היום', icon: 'calendar', sub: fmtDM(date) },
-    next && { value: 'next', label: 'ליום העבודה הבא', icon: 'right', sub: fmtDM(next) },
-    { value: 'date', label: 'לתאריך אחר…', icon: 'calendar' },
-    !t.virtual && { value: 'slot', label: 'לשבץ בחלון הפנוי הראשון', icon: 'wand', sub: 'הצעה לפי התבנית והזמן הפנוי' },
-    { value: 'defer', label: 'לדחות עד…', icon: 'hourglass', sub: 'לא תופיע עד תאריך החזרה' },
-    { value: 'waiting', label: 'ממתינה לתשובה / מעקב', icon: 'clock' },
-    t.status !== 'inProgress' && { value: 'progress', label: 'בתהליך', icon: 'dot' },
-    { value: 'cancel', label: 'ביטול המשימה', icon: 'x', danger: true },
+    open && t.scheduledDate !== tomorrow && { value: 'tomorrow', label: 'העברה למחר', icon: 'right' },
+    open && { value: 'date', label: 'תאריך אחר…', icon: 'calendar' },
+    open && { value: 'waiting', label: 'ממתינה לתשובה', icon: 'hourglass' },
+    open && { value: 'defer', label: 'דחייה עד…', icon: 'clock' },
+    !open && { value: 'today', label: 'החזרה למשימות של היום', icon: 'undo' },
+    t.status !== 'canceled' && { value: 'cancel', label: 'ביטול המשימה', icon: 'x', danger: true },
+    t.recurringRuleId && { value: 'stop', label: 'הפסקת החזרה', icon: 'repeat', danger: true },
   ]);
   if (!v) return;
   const id = t.id;
-  if (v === 'today') return run('rescheduleTask', { id, date }, { success: 'תוזמנה להיום' });
-  if (v === 'next') return run('rescheduleTask', { id, date: next }, { success: `הועברה ל־${fmtDM(next)}` });
-  if (v === 'date') { const d = await pickDate('תאריך ביצוע', t.scheduledDate); if (d) return run('rescheduleTask', { id, date: d }, { success: `תוזמנה ל־${fmtDM(d)}` }); return; }
-  if (v === 'defer') { const d = await pickDate('לדחות עד', addDays(date, 1)); if (d) return run('setTaskStatus', { id, status: 'deferred', resumeOn: d }, { success: `נדחתה עד ${fmtDM(d)}` }); return; }
-  if (v === 'waiting') {
-    const note = await promptText('ממתינה ל…', { label: 'למה ממתינה (כללי, בלי פרטים מזהים)', required: false, ok: 'המשך' });
-    if (note === null) return;
-    const f = await promptText('מועד מעקב (לא חובה)', { type: 'date', value: '', required: false, ok: 'שמירה' });
-    if (f === null) return;
-    return run('setTaskStatus', { id, status: 'waiting', waitingNote: note, followUpOn: f || null }, { success: 'הועברה לממתינים' });
-  }
-  if (v === 'progress') return run('setTaskStatus', { id, status: 'inProgress' }, { success: 'סומנה בתהליך' });
+  if (v === 'tomorrow') return run('rescheduleTask', { id, date: tomorrow }, { success: 'הועברה למחר' });
+  if (v === 'today') return run('rescheduleTask', { id, date }, { success: 'הוחזרה להיום' });
+  if (v === 'date') { const d = await pickDate('תאריך ביצוע', t.scheduledDate); if (d) return run('rescheduleTask', { id, date: d }, { success: `הועברה ל-${fmtDM(d)}` }); return; }
+  if (v === 'defer') { const d = await pickDate('דחייה עד', tomorrow); if (d) return run('setTaskStatus', { id, status: 'deferred', resumeOn: d }, { success: `נדחתה עד ${fmtDM(d)}` }); return; }
+  if (v === 'waiting') return run('setTaskStatus', { id, status: 'waiting' }, { success: 'סומנה כממתינה לתשובה' });
   if (v === 'cancel') return run('setTaskStatus', { id, status: 'canceled' }, { success: 'המשימה בוטלה' });
-  if (v === 'slot') {
-    const n = nowCtx();
-    const res = firstFreeSlot(S(), id, n);
-    if (!res.assignment) { toast(res.reason || 'לא נמצא חלון מתאים', { error: true }); return; }
-    const a = res.assignment;
-    const ok = await confirmDialog(`לשבץ ב״${a.blockTitle}״ ${relDay(a.date, n.date)} (${fmtDM(a.date)})?\n${a.reason}${a.assumed ? `\nהערכת זמן משוערת: ${a.estimate} דק׳ (לא הוזנה הערכה)` : ''}`, { title: 'הצעת שיבוץ', ok: 'לשבץ' });
-    if (ok) return run('applyPlannerAssignments', { assignments: [a] }, { success: 'המשימה שובצה' });
+  if (v === 'stop' && await confirmDialog(`להפסיק את החזרה של ״${t.title}״? הפעמים הקודמות נשמרות.`, { ok: 'הפסקה', danger: true })) {
+    return run('archiveRecurringRule', { id: t.recurringRuleId }, { success: 'החזרה הופסקה' });
   }
 }
 
-/**
- * One canonical task row. `info` carries carryover provenance when shown in the carried list.
- */
-export function taskRow(t, { date = nowCtx().date, info = null, onOpen = null, showDue = true } = {}) {
+/** One canonical task row. `info` carries carryover provenance when shown as unfinished. */
+export function taskRow(t, { date = nowCtx().date, info = null, showDue = true } = {}) {
   const state = S();
   const done = t.status === 'done';
   const meta = [];
-  if (info) {
-    meta.push(h('span', 'תוכננה ל־', ltr(fmtDM(info.originalDate))));
-    meta.push(h('span', info.ageDays === 1 ? 'מאתמול' : `לפני ${info.ageDays} ימים`));
-  } else if (showDue && t.scheduledDate && t.scheduledDate !== date) meta.push(h('span', relDay(t.scheduledDate, date)));
-  if (t.deadline) meta.push(h('span' + (t.deadline < date && !done ? '.chip.danger' : ''), 'יעד ', ltr(fmtDM(t.deadline))));
-  if (t.status !== 'todo' && t.status !== 'done') meta.push(h('span.chip', TASK_STATUS_LABEL[t.status]));
-  if (t.subtasks?.length) meta.push(h('span', ltr(`${t.subtasks.filter((s) => s.done).length}/${t.subtasks.length}`), ' תתי־משימות'));
+  if (info?.originalDate) meta.push(h('span', 'מ-', ltr(fmtDM(info.originalDate))));
+  else if (showDue && !done) {
+    const due = t.status === 'deferred' ? t.resumeOn : t.scheduledDate;
+    if (due && due !== date) meta.push(h('span', ltr(fmtDM(due))));
+    else if (!due) meta.push(h('span', 'ללא תאריך'));
+  }
+  if (done && t.completedOn) meta.push(h('span', ltr(fmtDM(t.completedOn))));
+  if (t.deadline && !done) meta.push(h('span' + (t.deadline < date ? '.late' : ''), 'יעד ', ltr(fmtDM(t.deadline))));
+  if (STATUS_NOTE[t.status]) meta.push(h('span', STATUS_NOTE[t.status]));
   if (t.recurringRuleId) meta.push(h('span.row', ic('repeat', 14), 'חוזרת'));
-  if (t.estimateMinutes) meta.push(h('span', ltr(`${t.estimateMinutes}`), ' דק׳'));
-  if (t.categoryId) meta.push(catChip(state, t.categoryId));
-  const open = onOpen || (async () => (await import('../editors.js')).openTaskEditor(t.virtual ? t : state.tasks.find((x) => x.id === t.id) || t, { date }));
+  const openEditor = async () => (await import('../editors.js')).openTaskEditor(t.virtual ? t : state.tasks.find((x) => x.id === t.id) || t, { date });
   return h('div.item' + (done ? '.done' : ''), { dataset: { taskId: t.id } },
-    h('button.cb', {
-      type: 'button', 'aria-pressed': String(done), 'aria-label': done ? `סימון ״${t.title}״ כלא הושלמה` : `סימון ״${t.title}״ כהושלמה`,
-      onclick: () => run('toggleTaskDone', { id: t.id }, { success: done ? 'סומנה כפתוחה' : 'כל הכבוד – הושלמה' }),
-    }, h('span.box', { svg: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>' })),
-    h('span.prio.' + (t.priority || 'medium'), { title: `עדיפות ${PRIORITY_LABEL[t.priority] || ''}` }),
-    h('div.body', h('button.link', { type: 'button', onclick: open }, h('div.title', t.title), meta.length ? h('div.meta', meta) : null)),
+    checkBox(done, done ? `סימון ״${t.title}״ כלא הושלמה` : `סימון ״${t.title}״ כהושלמה`, () => run('toggleTaskDone', { id: t.id }, { success: done ? 'סומנה כפתוחה' : 'הושלמה' })),
+    h('span.prio.' + (t.priority || 'medium'), { title: `עדיפות ${PRIORITY_LABEL[t.priority] || ''}`, 'aria-hidden': 'true' }),
+    h('div.body', h('button.link', { type: 'button', onclick: openEditor, 'aria-label': `עריכת ${t.title}` }, h('div.title', t.title), meta.length ? h('div.meta', meta) : null)),
     done ? null : iconBtn('more', `אפשרויות עבור ${t.title}`, () => taskMenu(t, date)));
 }
 
 export function taskList(items, opts = {}) {
-  if (!items.length) return empty(opts.emptyText || 'אין משימות', opts.emptyIcon);
+  if (!items.length) return opts.emptyText ? empty(opts.emptyText, opts.emptyIcon) : null;
   return h('div.list', items.map((x) => (x.task ? taskRow(x.task, { ...opts, info: x }) : taskRow(x, opts))));
 }
 
-export function dateNav(date, hrefFor, label) {
-  const prev = addDays(date, -1), next = addDays(date, 1);
-  const picker = h('input.input', { type: 'date', value: date, 'aria-label': 'בחירת תאריך', onchange: (e) => { if (isValidDate(e.target.value)) location.hash = hrefFor(e.target.value); } });
-  return h('nav.datenav', { 'aria-label': 'ניווט בין ימים' },
-    h('a.icon-btn', { href: hrefFor(prev), 'aria-label': 'היום הקודם', svg: '<svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>' }),
-    h('div.grow', label), picker,
-    h('a.icon-btn', { href: hrefFor(next), 'aria-label': 'היום הבא', svg: '<svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>' }));
+/** Previous / date (tap to pick) / next. The formatted date is the only date shown. */
+export function dateNav(date, hrefFor, { step = 1, label = null, unit = 'day' } = {}) {
+  const names = { day: ['היום הקודם', 'היום הבא'], week: ['השבוע הקודם', 'השבוע הבא'] }[unit];
+  const picker = dateInput(date, { label: 'בחירת תאריך', short: true, onchange: (v) => { if (isValidDate(v)) location.hash = hrefFor(v); } });
+  if (label) picker.querySelector('.date-text').textContent = label;
+  picker.classList.add('nav-date');
+  return h('nav.datenav', { 'aria-label': unit === 'week' ? 'ניווט בין שבועות' : 'ניווט בין ימים' },
+    h('a.icon-btn', { href: hrefFor(addDays(date, -step)), 'aria-label': names[0], svg: '<svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>' }),
+    picker,
+    h('a.icon-btn', { href: hrefFor(addDays(date, step)), 'aria-label': names[1], svg: '<svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>' }));
 }
+
+/** Navigation to today, shown only when another date is displayed. */
+export const todayLink = (date, today, href) => (date === today ? null : h('a.btn.small.soft.today-link', { href }, 'היום'));

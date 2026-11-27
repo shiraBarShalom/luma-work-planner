@@ -4,129 +4,77 @@
   "locale": "he-IL",
   "direction": "rtl",
   "designSystem": "00-design-system.json",
+  "exampleDataOnly": true,
   "source": {
-    "description": "User-approved home mockup, no wave under greeting"
-  },
-  "visualReference": {
-    "observed": [
-      "Small upper-right Luma wordmark, greeting below without underline.",
-      "Timer and inquiry ring, horizontal day progress, three priority tasks and five shortcut tiles."
-    ],
-    "exampleDataOnly": true
+    "description": "Simplified home (v2). Supersedes the v1 approved home; banner, wordmark and greeting are unchanged."
   },
   "layout": {
     "headerVariant": "home",
-    "scroll": "vertical",
+    "header": [
+      "banner image",
+      "Luma wordmark (upper right)",
+      "greeting",
+      "bell (left)",
+      "add + (left)"
+    ],
     "navigation": "shared bottom navigation",
     "activeTab": "home",
     "components": [
       {
-        "id": "greeting",
-        "type": "dynamicGreeting",
-        "sample": "ערב טוב, כרמית"
-      },
-      {
-        "id": "dayContext",
-        "type": "dateLocationStrip",
-        "sample": {
-          "date": "יום שלישי, 28 בינואר",
-          "location": "במשרד"
-        },
-        "additional": "show duty when active"
+        "id": "date",
+        "type": "textLine",
+        "sample": "יום שני, 30 בנובמבר",
+        "rules": "weekday and Gregorian date once; no year, no Hebrew date, no location/duty/hours"
       },
       {
         "id": "current",
         "type": "activityCard",
         "sample": {
-          "title": "טיפול בפניות",
-          "start": "09:15",
-          "end": "12:00",
-          "remaining": "2:18",
-          "next": "בלוק מייל | 12:00"
+          "label": "עכשיו",
+          "title": "מענה לטלפונים ולפניות ב-CRM",
+          "time": "09:00-13:00",
+          "remaining": "נותרו 2:40",
+          "next": "אחר כך: הפסקה · 13:00"
         },
-        "action": "openFocus"
+        "states": {
+          "several": "each current activity as a compact row",
+          "next": "label הפעילות הבאה + time until it",
+          "noneLeft": "אין עוד פעילויות היום",
+          "noActivities": "אין פעילויות היום"
+        }
       },
       {
-        "id": "widgets",
-        "type": "twoColumnWidgets",
-        "items": [
-          {
-            "id": "inquiries",
-            "label": "מונה פניות",
-            "value": 7,
-            "goal": 10,
-            "action": "openCounter",
-            "quickAction": "+1"
-          },
-          {
-            "id": "workday",
-            "label": "התקדמות יום העבודה",
-            "value": 42,
-            "unit": "percent"
-          }
-        ]
+        "id": "counter",
+        "type": "counterCard",
+        "sample": {
+          "label": "פניות היום",
+          "count": 3,
+          "target": 10
+        },
+        "controls": [
+          "round minus (disabled at 0)",
+          "round plus (primary)",
+          "איפוס text button with confirmation"
+        ],
+        "indicator": "thin progress bar; green when target reached"
       },
       {
         "id": "priorities",
-        "type": "checklist",
-        "title": "3 המשימות החשובות היום",
-        "items": [
-          "להשלים את דוח החודש",
-          "להכין שאלות לישיבת צוות",
-          "מענה לפניות פתוחות"
-        ],
-        "actions": [
-          "complete",
-          "reorder",
-          "openTask"
-        ]
-      },
-      {
-        "id": "carryover",
-        "type": "taskList",
-        "title": "משימות שלא הסתיימו עד היום",
-        "required": true,
-        "source": "derived canonical task selector; previous unfinished actionable work only",
-        "actions": [
-          "toggleComplete",
-          "openTask",
-          "reschedule"
-        ]
-      },
-      {
-        "id": "shortcuts",
-        "type": "quickActions",
-        "items": [
-          {
-            "label": "פנייה טופלה",
-            "action": "incrementCounter"
-          },
-          {
-            "label": "הוספת משימה",
-            "action": "openAddTask"
-          },
-          {
-            "label": "פגישות",
-            "action": "openMeetings",
-            "exampleCount": 2
-          },
-          {
-            "label": "שאלות",
-            "action": "openQuestions",
-            "exampleCount": 3
-          },
-          {
-            "label": "סיכומים",
-            "action": "openReports"
-          }
-        ]
+        "type": "section",
+        "title": "3 המשימות החשובות שלי להיום",
+        "rows": "checkbox + title + remove",
+        "add": "בחירת משימה (dashed add-row) while fewer than three"
       }
     ]
   },
-  "implementationNotes": [
-    "Canonical home layout.",
-    "Add optional widgets for next-hour tasks, meetings, unanswered questions and closing day without making all mandatory.",
-    "Mockup greeting and activity time are inconsistent sample data, not a rule.",
-    "The carried-task list is mandatory, distinct from new tasks, and shares the same task IDs as Tasks. Counts and statuses are computed from live local state."
+  "excluded": [
+    "workday progress",
+    "carried tasks",
+    "today's task list",
+    "alerts",
+    "shortcut tiles",
+    "non-working-day cards",
+    "phone duty",
+    "office/home"
   ]
 }

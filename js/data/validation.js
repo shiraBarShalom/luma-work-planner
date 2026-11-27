@@ -12,10 +12,6 @@ import { recurrenceErrors } from '../engine/recurrence.js';
 import { headerRuleErrors } from '../engine/header.js';
 import { LIMITS } from '../config.js';
 
-export class ValidationError extends Error {
-  constructor(errors) { super('state validation failed: ' + errors.slice(0, 5).join('; ')); this.errors = errors; }
-}
-
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isStr = (v, max = LIMITS.text) => typeof v === 'string' && v.length <= max;
 const optStr = (v, max) => v == null || isStr(v, max);
@@ -67,6 +63,8 @@ export function validateState(s) {
     if (!Array.isArray(st.closingChecklist)) err('settings.closingChecklist', 'array');
     if (!isObj(st.planner)) err('settings.planner', 'object');
     if (!isObj(st.backup) || !isInt(st.backup.reminderDays, 0, 365)) err('settings.backup', 'invalid');
+    if (st.notifications != null && (!isObj(st.notifications) || typeof st.notifications.activityStart !== 'boolean' || typeof st.notifications.showDetails !== 'boolean')) err('settings.notifications', 'invalid');
+    if (!optDate(st.routineEndsOn)) err('settings.routineEndsOn', 'invalid');
     const hr = headerRuleErrors(st.header?.rules);
     if (hr.length) err('settings.header', hr.join(', '));
     if (!s.dayTemplates.some?.((t) => t.id === st.defaultTemplateId)) err('settings.defaultTemplateId', 'unknown template');
@@ -187,7 +185,12 @@ export function validateState(s) {
     else for (const id of ids) if (!taskIds.has(id)) err(`dailyPriorities.${d}`, `unknown task ${id}`);
   }
 
-  // inquiries
+  // inquiry counter (one number per date) and legacy count events
+  if (!isObj(s.inquiryCounts)) err('inquiryCounts', 'object');
+  else for (const [d, n] of Object.entries(s.inquiryCounts)) {
+    if (!isValidDate(d)) err('inquiryCounts', `key ${d}`);
+    if (!isInt(n, 0, 100000)) err(`inquiryCounts.${d}`, 'must be a non-negative integer');
+  }
   const evIds = new Set();
   const totals = new Map();
   if (!Array.isArray(s.inquiryLogs)) err('inquiryLogs', 'array');
@@ -278,10 +281,4 @@ export function validateState(s) {
   if (!Array.isArray(s.importHistory)) err('importHistory', 'array');
   if (!isObj(s.alertDismissals) || !isObj(s.dayNotes)) err('misc', 'objects');
   return { ok: e.length === 0, errors: e };
-}
-
-export function assertValidState(s) {
-  const r = validateState(s);
-  if (!r.ok) throw new ValidationError(r.errors);
-  return s;
 }

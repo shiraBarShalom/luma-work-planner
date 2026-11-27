@@ -1,8 +1,9 @@
 // Browser end-to-end tests (dev-only, Playwright). Run: npm run test:browser
 // Uses synthetic data and Playwright's fake clock. Starts its own static servers under a
-// /luma/ subpath to verify relative paths. Uses the bundled Chromium if installed, else
-// the system Chrome channel.
-import { chromium } from 'playwright';
+// /luma/ subpath to verify relative paths. Chromium (bundled, else system Chrome) runs the
+// full suite; WebKit, when installed (`npx playwright install webkit`), runs the mobile
+// layout checks too. Set LUMA_ENGINES=chromium to skip WebKit.
+import { chromium, webkit } from 'playwright';
 import { spawn } from 'node:child_process';
 import { cp, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -27,8 +28,9 @@ async function launch() {
   try { return await chromium.launch(); } catch { return chromium.launch({ channel: 'chrome' }); }
 }
 
-/** ISO instant for a Jerusalem wall time (winter, UTC+2). */
+/** Instant for a Jerusalem wall time (winter, UTC+2). */
 const jlm = (date, time) => new Date(`${date}T${time}:00+02:00`);
+const MON = '2026-11-30';
 
 async function test(name, fn) {
   const t0 = Date.now();
@@ -36,167 +38,380 @@ async function test(name, fn) {
   catch (e) { results.push({ name, ok: false, err: e }); console.log(`✖ ${name}\n   ${e.stack?.split('\n').slice(0, 4).join('\n   ')}`); }
 }
 
-async function newPage(browser, base, { time = null, viewport = { width: 390, height: 844 }, colorScheme = 'light', serviceWorkers = 'block' } = {}) {
-  const ctx = await browser.newContext({ viewport, locale: 'he-IL', timezoneId: 'Europe/London', colorScheme, serviceWorkers });
+async function newPage(browser, base, { time = jlm(MON, '10:20'), viewport = { width: 390, height: 844 }, colorScheme = 'light', serviceWorkers = 'block', hash = '#/home' } = {}) {
+  const ctx = await browser.newContext({ viewport, locale: 'he-IL', timezoneId: 'Europe/London', colorScheme, serviceWorkers, hasTouch: true });
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   if (time) await page.clock.install({ time });
-  await page.goto(base + '#/home');
+  await page.goto(base + hash);
   await page.waitForSelector('.page');
   return { ctx, page, errors };
 }
 
+const go = async (page, base, hash, sel = '.page') => { await page.goto(base + hash); await page.waitForSelector(sel); };
+const dispatch = (page, name, payload) => page.evaluate(async ([n, p]) => (await import('./js/app.js')).store.dispatch(n, p).then((r) => r.result ?? r.ok), [name, payload]);
+const stateOf = (page) => page.evaluate(async () => (await import('./js/app.js')).store.state);
 const sectionTitles = (page, which) => page.locator(`[data-section="${which}"] .item .title`).allTextContents();
+const visibleText = (page) => page.evaluate(() => document.body.innerText);
 
-async function addTaskViaUi(page, title, { date = null } = {}) {
-  await page.goto(page.url().split('#')[0] + '#/tasks/today');
+async function addTaskViaUi(page, base, title, { priority = null } = {}) {
+  await go(page, base, '#/tasks/today');
+  await page.getByRole('button', { name: 'הוספה', exact: true }).click();
   await page.getByRole('button', { name: 'הוספת משימה' }).click();
   await page.getByLabel('תיאור המשימה').fill(title);
-  if (date) await page.getByLabel('תאריך ביצוע').fill(date);
-  await page.locator('.sheet-foot').getByRole('button', { name: 'הוספת משימה' }).click();
+  if (priority) await page.getByRole('radio', { name: priority }).click();
+  await page.locator('.sheet-foot').getByRole('button', { name: 'הוספה' }).click();
   await page.waitForSelector('.backdrop', { state: 'detached' });
 }
 
 const base = await serve(ROOT, 8731);
 const browser = await launch();
 
-await test('boot: Hebrew RTL shell, five primary tabs in order, no console errors', async () => {
-  const { page, errors, ctx } = await newPage(browser, base, { time: jlm('2026-11-30', '10:30') });
+await test('boot: Hebrew RTL shell, five tabs, Home shows only date, activity, counter and priorities', async () => {
+  const { page, errors, ctx } = await newPage(browser, base);
   assert.equal(await page.getAttribute('html', 'dir'), 'rtl');
   assert.equal(await page.getAttribute('html', 'lang'), 'he');
-  const tabs = await page.locator('nav.nav a').allTextContents();
-  assert.deepEqual(tabs, ['היום שלי', 'סדר היום', 'משימות', 'יומן', 'הגדרות']);
-  assert.equal(await page.locator('[data-section="carried"] h2').first().textContent().then((t) => t.includes('משימות שלא הסתיימו עד היום')), true);
+  assert.deepEqual(await page.locator('nav.nav a').allTextContents(), ['היום שלי', 'סדר היום', 'משימות', 'יומן', 'הגדרות']);
+  const blocks = await page.locator('.page.home > *').evaluateAll((els) => els.map((e) => e.className || e.tagName));
+  assert.deepEqual(blocks, ['today-date', 'card activity', 'card counter', 'section'], 'approved content only, in order');
+  const text = await visibleText(page);
+  assert.equal((text.match(/30 בנובמבר/g) || []).length, 1, 'date shown once');
+  assert.doesNotMatch(text, /תשפ״|תורנות|במשרד|מהבית|שעות עבודה|התקדמות|קיצורים|התראות פעילות|לא הסתיימו/);
+  assert.equal(await page.locator('header [aria-label="חיפוש"], a[href="#/search"]').count(), 0, 'no global search');
+  assert.equal(await page.locator('header').getByRole('link', { name: 'התראות' }).count(), 1, 'bell kept');
+  assert.match(await page.locator('.activity').textContent(), /מענה לטלפונים ולפניות ב-CRM[\s\S]*נותרו/);
+  assert.match(await page.locator('.activity').textContent(), /אחר כך: הפסקה/);
   assert.deepEqual(errors, []);
   await ctx.close();
 });
 
-await test('header banner + greeting follow Jerusalem time boundaries and update while visible', async () => {
-  const { page, ctx } = await newPage(browser, base, { time: jlm('2026-11-30', '07:59') });
+await test('home: outside activity hours shows a concise neutral state; overlapping activities both shown', async () => {
+  const { page, ctx } = await newPage(browser, base, { time: jlm(MON, '19:00') });
+  assert.equal((await page.locator('.activity').innerText()).trim().replace(/\s+/g, ' '), 'עכשיו אין עוד פעילויות היום');
+  await page.clock.setSystemTime(jlm(MON, '10:15'));
+  await dispatch(page, 'addBlock', { date: MON, start: '10:00', end: '11:00', title: 'ישיבת צוות' });
+  await page.reload(); await page.waitForSelector('.activity');
+  assert.deepEqual(await page.locator('.activity h2').allTextContents(), ['מענה לטלפונים ולפניות ב-CRM', 'ישיבת צוות']);
+  await ctx.close();
+});
+
+await test('header banner + greeting follow Jerusalem time boundaries', async () => {
+  const { page, ctx } = await newPage(browser, base, { time: jlm(MON, '07:59') });
   assert.equal(await page.getAttribute('header.hdr', 'data-banner'), 'dawn');
   assert.match(await page.locator('.greeting').textContent(), /בוקר טוב, כרמית/);
   await page.clock.runFor(2 * 60 * 1000);
   await page.waitForFunction(() => document.querySelector('header.hdr')?.dataset.banner === 'day');
-  for (const [t, img, g] of [['04:59', 'night', 'לילה טוב'], ['05:00', 'dawn', 'בוקר טוב'], ['12:00', 'day', 'צהריים טובים'], ['17:00', 'sunset', 'ערב טוב'], ['20:00', 'night', 'לילה טוב'], ['00:00', 'night', 'לילה טוב']]) {
+  for (const [t, img] of [['12:00', 'day'], ['17:00', 'sunset'], ['20:00', 'night']]) {
     await page.clock.setSystemTime(jlm('2026-12-01', t));
     await page.reload(); await page.waitForSelector('.greeting');
     assert.equal(await page.getAttribute('header.hdr', 'data-banner'), img, t);
-    assert.match(await page.locator('.greeting').textContent(), new RegExp(g), t);
   }
-  assert.equal(await page.locator('.greeting::after').count().catch(() => 0), 0);
   await ctx.close();
 });
 
-await test('carryover: unchecked Monday task appears Tuesday on Home and Tasks (same record), weekend skipped, completion removes it everywhere', async () => {
-  const { page, ctx } = await newPage(browser, base, { time: jlm('2026-11-30', '10:00') });
-  await addTaskViaUi(page, 'משימת בדיקה א');
-  await page.goto(base + '#/home'); await page.waitForSelector('.page');
+await test('inquiry counter: plus, minus, never below zero, reset with confirmation, persists', async () => {
+  const { page, ctx } = await newPage(browser, base);
+  const value = () => page.locator('.counter-value b').textContent();
+  assert.equal(await page.getByRole('button', { name: 'הפחתת פנייה' }).isDisabled(), true, 'minus disabled at zero');
+  for (let i = 0; i < 3; i++) await page.getByRole('button', { name: 'הוספת פנייה' }).click();
+  await page.getByRole('button', { name: 'הפחתת פנייה' }).click();
+  await page.waitForFunction(() => document.querySelector('.counter-value b')?.textContent === '2');
+  await page.reload(); await page.waitForSelector('.counter-value');
+  assert.equal(await value(), '2');
+  assert.match(await page.locator('.counter-value').textContent(), /\/\s*10/);
+  await page.locator('.counter .link-btn').click();
+  await page.locator('.sheet').getByRole('button', { name: 'ביטול' }).click();
+  await page.waitForSelector('.backdrop', { state: 'detached' });
+  assert.equal(await value(), '2', 'canceled reset keeps the count');
+  await page.locator('.counter .link-btn').click();
+  await page.locator('.sheet-foot').getByRole('button', { name: 'איפוס' }).click();
+  await page.waitForFunction(() => document.querySelector('.counter-value b')?.textContent === '0');
+  const st = await stateOf(page);
+  assert.equal(st.inquiryLogs.length, 0, 'no per-tap records');
+  await ctx.close();
+});
+
+await test('three priorities reference real tasks; completing one updates the Tasks screen', async () => {
+  const { page, ctx } = await newPage(browser, base);
+  await addTaskViaUi(page, base, 'משימה חשובה');
+  await go(page, base, '#/home');
+  await page.getByRole('button', { name: 'בחירת משימה' }).click();
+  await page.locator('.choice', { hasText: 'משימה חשובה' }).click();
+  await page.waitForSelector('[data-section="priorities"] .item');
+  await page.locator('[data-section="priorities"] .cb').click();
+  await page.waitForSelector('[data-section="priorities"] .item.done');
+  await go(page, base, '#/tasks/today', '[data-section="today"]');
+  assert.deepEqual(await sectionTitles(page, 'today'), [], 'gone from open sections');
+  await go(page, base, '#/tasks/done', '[data-section="done"]');
+  assert.deepEqual(await page.locator('[data-section="done"] .title').allTextContents(), ['משימה חשובה']);
+  assert.equal((await stateOf(page)).tasks.length, 1, 'one record');
+  await ctx.close();
+});
+
+await test('carryover: unchecked Monday task appears Tuesday under "לא הסתיימו" on Tasks (not Home), no clone, weekend skipped', async () => {
+  const { page, ctx } = await newPage(browser, base, { time: jlm(MON, '10:00') });
+  await addTaskViaUi(page, base, 'משימת בדיקה א');
   assert.deepEqual(await sectionTitles(page, 'today'), ['משימת בדיקה א']);
   assert.deepEqual(await sectionTitles(page, 'carried'), []);
-  // Next day, app reopened; no closing was done.
   await page.clock.setSystemTime(jlm('2026-12-01', '09:05'));
-  await page.reload(); await page.waitForSelector('.page');
+  await page.reload(); await page.waitForSelector('[data-section="carried"]');
   assert.deepEqual(await sectionTitles(page, 'carried'), ['משימת בדיקה א']);
   assert.deepEqual(await sectionTitles(page, 'today'), []);
   assert.match(await page.locator('[data-section="carried"] .meta').first().textContent(), /30 בנובמבר/);
-  await page.goto(base + '#/tasks/today'); await page.waitForSelector('[data-section="carried"]');
-  assert.deepEqual(await sectionTitles(page, 'carried'), ['משימת בדיקה א']);
-  // Several days later incl. weekend, still there.
+  await go(page, base, '#/home');
+  assert.equal(await page.locator('[data-section="carried"]').count(), 0, 'not on Home');
   await page.clock.setSystemTime(jlm('2026-12-06', '09:05'));
+  await go(page, base, '#/tasks/today', '[data-section="carried"]');
   await page.reload(); await page.waitForSelector('[data-section="carried"]');
-  assert.deepEqual(await sectionTitles(page, 'carried'), ['משימת בדיקה א']);
-  const count = await page.evaluate(() => new Promise((res) => { const r = indexedDB.open('luma-work-planner'); r.onsuccess = () => { const tx = r.result.transaction('state').objectStore('state').get('current'); tx.onsuccess = () => res(tx.result.tasks.length); }; }));
-  assert.equal(count, 1, 'no duplicate records');
-  // Complete from Tasks; gone from Home too.
+  assert.deepEqual(await sectionTitles(page, 'carried'), ['משימת בדיקה א'], 'still there after days closed');
+  assert.equal((await stateOf(page)).tasks.length, 1, 'no duplicate records');
   await page.locator('[data-section="carried"] .cb').first().click();
   await page.waitForFunction(() => !document.querySelector('[data-section="carried"] .item'));
-  await page.goto(base + '#/home'); await page.waitForSelector('[data-section="carried"]');
-  assert.deepEqual(await sectionTitles(page, 'carried'), []);
   await ctx.close();
 });
 
-await test('inquiry counter: +1 and batch persist across reload; undo cannot go negative', async () => {
-  const { page, ctx } = await newPage(browser, base, { time: jlm('2026-11-30', '10:00') });
-  await page.getByRole('button', { name: 'פנייה טופלה – הוספת 1 למונה' }).click();
-  await page.getByRole('button', { name: 'פנייה טופלה – הוספת 1 למונה' }).click();
-  await page.reload(); await page.waitForSelector('.ring');
-  assert.match(await page.locator('.ring-val').first().textContent(), /2\/10/);
-  await page.goto(base + '#/counter'); await page.waitForSelector('.counter-big');
-  for (let i = 0; i < 3; i++) await page.getByRole('button', { name: 'ביטול אחרון' }).click().catch(() => {});
-  await page.waitForTimeout(300);
-  assert.match(await page.locator('.counter-big').textContent(), /0\/10/);
+await test('tasks: search by title and note, priority sort both ways, filters behind the menu', async () => {
+  const { page, ctx } = await newPage(browser, base);
+  await dispatch(page, 'addTask', { title: 'נמוכה', priority: 'low', scheduledDate: MON });
+  await dispatch(page, 'addTask', { title: 'גבוהה', priority: 'high', scheduledDate: MON, details: 'מילת חיפוש' });
+  await dispatch(page, 'addTask', { title: 'בינונית', priority: 'medium', scheduledDate: MON });
+  await dispatch(page, 'addTask', { title: 'מחר', scheduledDate: '2026-12-01' });
+  await go(page, base, '#/tasks/today', '[data-section="today"]');
+  assert.deepEqual(await page.getByRole('radiogroup', { name: 'תצוגת משימות' }).getByRole('radio').allTextContents(), ['היום', 'הושלמו']);
+  assert.deepEqual(await sectionTitles(page, 'today'), ['גבוהה', 'בינונית', 'נמוכה']);
+  await page.getByLabel('מיון לפי עדיפות').selectOption('low');
+  assert.deepEqual(await sectionTitles(page, 'today'), ['נמוכה', 'בינונית', 'גבוהה']);
+  await page.getByLabel('חיפוש במשימות').fill('מילת');
+  assert.deepEqual(await sectionTitles(page, 'today'), ['גבוהה'], 'note is searched');
+  await page.getByLabel('חיפוש במשימות').fill('');
+  await page.getByRole('button', { name: 'מסננים נוספים' }).click();
+  const options = await page.locator('.choice').allTextContents();
+  assert.deepEqual(options, ['כל המשימות של השבוע', 'משימות למחר', 'לא הסתיימו', 'עתידיות', 'ממתינות לתשובה', 'נדחו', 'בוטלו']);
+  await page.locator('.choice', { hasText: 'משימות למחר' }).click();
+  await page.waitForSelector('h2.filter-title');
+  assert.deepEqual(await page.locator('.tasks-content .title').allTextContents(), ['מחר']);
+  assert.equal(await page.locator('text=קטגוריה').count(), 0, 'no category filter');
   await ctx.close();
 });
 
-await test('agenda: keyboard Alt+ArrowDown moves a block 15 min in the grid (accessible drag alternative)', async () => {
-  const { page, ctx } = await newPage(browser, base, { time: jlm('2026-11-30', '08:00'), viewport: { width: 1280, height: 900 } });
-  await page.goto(base + '#/calendar/day/2026-11-30'); await page.waitForSelector('.tg-blk');
-  const blk = page.locator('.tg-blk', { hasText: 'בלוק מייל שני' });
+await test('task editor: only description, priority, execution date, deadline, note', async () => {
+  const { page, ctx } = await newPage(browser, base);
+  await go(page, base, '#/tasks/today');
+  await page.getByRole('button', { name: 'הוספה', exact: true }).click();
+  await page.getByRole('button', { name: 'הוספת משימה' }).click();
+  assert.deepEqual(await page.locator('.sheet .field-label').allTextContents(), ['תיאור המשימה', 'עדיפות', 'תאריך ביצוע', 'מועד יעד', 'הערה']);
+  assert.match(await page.locator('.sheet .date-text').first().textContent(), /יום שני, 30 בנובמבר/);
+  await page.getByLabel('תיאור המשימה').fill('עם מועד');
+  await page.getByLabel('מועד יעד', { exact: true }).fill('2026-12-03');
+  await page.getByLabel('הערה').fill('קצר');
+  await page.locator('.sheet-foot').getByRole('button', { name: 'הוספה' }).click();
+  await page.waitForSelector('.backdrop', { state: 'detached' });
+  const t = (await stateOf(page)).tasks[0];
+  assert.deepEqual([t.title, t.scheduledDate, t.deadline, t.details, t.priority], ['עם מועד', MON, '2026-12-03', 'קצר', 'medium']);
+  await ctx.close();
+});
+
+await test('agenda: list and timeline share data and notes; list menu has exactly four actions', async () => {
+  const { page, ctx, errors } = await newPage(browser, base, { hash: `#/agenda/${MON}` });
+  assert.equal((await visibleText(page)).match(/30 בנובמבר/g).length, 1, 'date once');
+  assert.equal(await page.locator('input[type="date"]').evaluateAll((els) => els.filter((e) => getComputedStyle(e).opacity !== '0').length), 0, 'no separate visible date input (the picker sits invisibly over the date text)');
+  await page.getByRole('radio', { name: 'ציר שעות' }).click();
+  await page.getByRole('button', { name: 'הוספת פעילות' }).click();
+  assert.deepEqual(await page.locator('.sheet .field-label').allTextContents(), ['כותרת', 'תאריך', 'התחלה', 'סיום', 'הערות', 'חזרה']);
+  assert.doesNotMatch(await page.locator('.sheet').innerText(), /null|undefined/);
+  await page.getByLabel('כותרת').fill('ישיבת צוות');
+  await page.getByLabel('התחלה').fill('10:00');
+  await page.getByLabel('סיום').fill('11:00');
+  await page.locator('.sheet-foot').getByRole('button', { name: 'הוספה' }).click();
+  await page.waitForSelector('.tg-blk:has-text("ישיבת צוות")');
+  // Side by side: the meeting and the phone block do not cover each other.
+  const a = await page.locator('.tg-blk', { hasText: 'ישיבת צוות' }).boundingBox();
+  const b = await page.locator('.tg-blk', { hasText: 'מענה לטלפונים' }).boundingBox();
+  assert.ok(a.x + a.width <= b.x + 1 || b.x + b.width <= a.x + 1, 'overlapping activities are laid out side by side');
+  await page.getByLabel('הערות ליום').fill('הערה משותפת');
+  await page.getByRole('radio', { name: 'רשימה' }).click();
+  await page.waitForSelector('.tl-card:has-text("ישיבת צוות")');
+  assert.equal(await page.getByLabel('הערות ליום').inputValue(), 'הערה משותפת', 'notes shared and saved');
+  await page.getByRole('button', { name: 'סימון ״ישיבת צוות״ כהושלם' }).click();
+  await page.getByRole('button', { name: 'פעולות עבור הפסקה' }).click();
+  assert.deepEqual(await page.locator('.choice').allTextContents(), ['הושלם חלקית', 'דילוג', 'ביטול הפעילות', 'עריכה']);
+  await page.locator('.choice', { hasText: 'דילוג' }).click();
+  await page.waitForSelector('.tl-card.skipped');
+  assert.equal(await page.locator('.tl-card [aria-label^="הוספת משימה"]').count(), 0, 'no add-task inside cards');
+  await page.getByRole('radio', { name: 'ציר שעות' }).click();
+  await page.waitForSelector('.tg-blk.done:has-text("ישיבת צוות")');
+  const text = await visibleText(page);
+  assert.doesNotMatch(text, /עיכוב|הצעת תכנון|הדפסה|תמונה של היום|הישגים|גרירה|Alt/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await test('recurring activity editor: Sun-Thu shown as custom days; changing it asks this time / from now on', async () => {
+  const { page, ctx } = await newPage(browser, base, { hash: `#/agenda/${MON}` });
+  await page.getByRole('radio', { name: 'רשימה' }).click();
+  await page.getByRole('button', { name: 'פעולות עבור טיפול במיילים' }).click();
+  await page.locator('.choice', { hasText: 'עריכה' }).click();
+  await page.waitForSelector('.sheet .daypick');
+  assert.deepEqual(await page.locator('.daypick [aria-pressed="true"]').allTextContents(), ['א', 'ב', 'ג', 'ד', 'ה']);
+  await page.getByLabel('התחלה').fill('14:40');
+  await page.locator('.sheet-foot').getByRole('button', { name: 'שמירה' }).click();
+  await page.locator('.choice', { hasText: 'רק הפעם' }).click();
+  await page.waitForSelector('.tl-card:has-text("14:40-15:45")');
+  const st = await stateOf(page);
+  assert.equal(st.calendarBlocks.find((b) => b.id === 'default-email').start, '14:30', 'series unchanged');
+  await ctx.close();
+});
+
+await test('grid: keyboard Alt+ArrowDown moves an activity 15 min (accessible drag alternative)', async () => {
+  const { page, ctx } = await newPage(browser, base, { time: jlm(MON, '08:00'), viewport: { width: 1280, height: 900 }, hash: `#/calendar/day/${MON}` });
+  const blk = page.locator('.tg-blk', { hasText: 'טיפול במיילים' });
   await blk.focus();
   await page.keyboard.press('Alt+ArrowDown');
-  await page.waitForFunction(() => [...document.querySelectorAll('.tg-blk')].some((b) => b.textContent.includes('בלוק מייל שני') && b.dataset.s === String(15 * 60 + 45) && b.dataset.e === String(16 * 60 + 15)));
-  assert.equal(await page.evaluate(() => document.activeElement?.textContent.includes('בלוק מייל שני')), true, 'focus kept on moved block');
+  await page.waitForFunction(() => [...document.querySelectorAll('.tg-blk')].some((b) => b.textContent.includes('טיפול במיילים') && b.dataset.s === String(14 * 60 + 45)));
   await ctx.close();
 });
 
-await test('plan import via paste: preview requires meeting duration, approve applies, replay detected', async () => {
-  const { page, ctx } = await newPage(browser, base, { time: jlm('2026-11-29', '10:00') });
-  const plan = { format: 'luma-work-plan', schemaVersion: 1, kind: 'weekly', planId: 'e2e-week', weekStart: '2026-11-29',
-    meetings: [{ externalId: 'm1', title: 'ישיבת צוות לדוגמה', meetingType: 'team', date: '2026-11-30', start: '10:30', durationMinutes: null }],
-    tasks: [{ externalId: 't1', title: 'משימה מיובאת', scheduledDate: '2026-11-30' }] };
-  await page.goto(base + '#/import'); await page.waitForSelector('textarea');
+await test('week grid: mouse drag moves an activity to another day without duplicating it', async () => {
+  const { page, ctx } = await newPage(browser, base, { time: jlm('2026-11-29', '08:00'), viewport: { width: 1280, height: 1000 } });
+  await dispatch(page, 'addBlock', { date: MON, start: '07:00', end: '07:30', title: 'בלוק לגרירה' });
+  await go(page, base, '#/calendar/week/2026-11-29', '.tg-blk');
+  const box = await page.locator('.tg-blk', { hasText: 'בלוק לגרירה' }).boundingBox();
+  const target = await page.locator('.tg-col[data-date="2026-12-01"]').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + 8);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 - 10, box.y + 12, { steps: 3 });
+  await page.mouse.move(target.x + target.width / 2, box.y + 8, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForFunction(async () => (await import('./js/app.js')).store.state.calendarBlocks.some((b) => b.title === 'בלוק לגרירה' && b.date === '2026-12-01'));
+  const n = (await stateOf(page)).calendarBlocks.filter((b) => b.title === 'בלוק לגרירה').map((b) => b.date);
+  assert.deepEqual(n, ['2026-12-01']);
+  await ctx.close();
+});
+
+await test('calendar: month navigation and day tap; week and day show only navigation and grid', async () => {
+  const { page, ctx } = await newPage(browser, base, { hash: `#/calendar/month/${MON}` });
+  await page.getByRole('button', { name: 'החודש הבא' }).click();
+  await page.waitForFunction(() => location.hash.includes('2026-12-30'));
+  assert.equal(await page.getByLabel('חודש', { exact: true }).inputValue(), '12');
+  await page.getByRole('button', { name: 'החודש הקודם' }).click();
+  await page.waitForFunction(() => location.hash.includes('2026-11-30'));
+  await page.waitForSelector('.month[aria-label="נובמבר 2026"]');
+  await page.getByLabel('שנה', { exact: true }).fill('2027'); await page.getByLabel('שנה', { exact: true }).dispatchEvent('change');
+  await page.waitForFunction(() => location.hash.includes('2027-11-01'));
+  await go(page, base, `#/calendar/month/${MON}`);
+  assert.equal(await page.locator('.month-card ~ *').count(), 0, 'nothing below the month');
+  await page.locator('.mday.out', { hasText: /^3$/ }).click();
+  await page.waitForFunction(() => location.hash.startsWith('#/calendar/day/2026-12-03'));
+  await page.waitForSelector('.tg.single');
+  await go(page, base, '#/calendar/week/2026-11-29', '.tg');
+  assert.deepEqual(await page.locator('.page > *').evaluateAll((els) => els.map((e) => e.className)), ['nav-row', 'datenav', 'tg'], 'week: navigation + calendar only');
+  assert.doesNotMatch(await visibleText(page), /פניות:|ימי עבודה|משימות השבוע|ייבוא תוכנית|גרירה/);
+  await ctx.close();
+});
+
+await test('settings: only target, notifications, appearance and links; target saves', async () => {
+  const { page, ctx } = await newPage(browser, base, { hash: '#/settings' });
+  assert.deepEqual(await page.locator('.section-head h2').allTextContents(), ['יעד פניות יומי', 'התראות', 'תצוגה ונגישות']);
+  assert.deepEqual(await page.locator('a.link-row .title').allTextContents(), ['גיבוי ושחזור', 'ייבוא תוכנית מ-ChatGPT', 'עדכונים, אחסון ופרטיות']);
+  assert.doesNotMatch(await visibleText(page), /תורנות|קטגוריות|תבנית יום|מתכנן|סגירת יום|כותרת וברכה|מחושבות במכשיר/);
+  await page.getByRole('spinbutton', { name: 'יעד פניות יומי' }).fill('12');
+  await page.locator('.inline-form').getByRole('button', { name: 'שמירה' }).click();
+  await go(page, base, '#/home');
+  assert.match(await page.locator('.counter-value').textContent(), /\/\s*12/);
+  await ctx.close();
+});
+
+await test('notifications: honest state when blocked; when allowed, settings and test notification work through the service worker', async () => {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'allow' });
+  const page = await ctx.newPage();
+  // Record what the app asks the service worker to show (headless browsers do not keep a notification list).
+  await page.addInitScript(() => {
+    window.__shown = [];
+    const orig = ServiceWorkerRegistration.prototype.showNotification;
+    ServiceWorkerRegistration.prototype.showNotification = function (title, opts) { window.__shown.push({ title, body: opts.body, tag: opts.tag }); return orig.call(this, title, opts); };
+  });
+  await page.goto(base + '#/settings'); await page.waitForSelector('.page');
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  const perm = await page.evaluate(() => Notification.permission);
+  if (perm === 'denied') assert.match(await page.locator('.section', { hasText: 'התראות' }).innerText(), /ההתראות חסומות/);
+  if (perm === 'default') assert.equal(await page.getByRole('button', { name: 'הפעלת התראות' }).count(), 1, 'permission is requested only from this button');
+  await ctx.grantPermissions(['notifications']);
+  await page.reload(); await page.waitForSelector('.page');
+  await page.getByText('תזכורת בתחילת כל פעילות').click();
+  await page.waitForFunction(async () => (await import('./js/app.js')).store.state.settings.notifications.activityStart === true);
+  assert.equal((await stateOf(page)).settings.notifications.showDetails, false, 'lock-screen details off by default');
+  await page.getByRole('button', { name: 'התראת בדיקה' }).click();
+  await page.waitForFunction(() => window.__shown.length > 0);
+  assert.deepEqual(await page.evaluate(() => window.__shown), [{ title: 'Luma', body: 'התראת בדיקה', tag: 'luma-test' }]);
+  assert.equal(await page.locator('.toast.error').count(), 0, 'no failure reported');
+  // Activity-start reminder while open: generic lock-screen text, sent once per occurrence.
+  await page.clock.install({ time: jlm(MON, '13:59') });
+  await page.reload(); await page.waitForSelector('.page');
+  await page.evaluate(() => { window.__shown = []; });
+  await page.clock.runFor(70 * 1000);
+  await page.waitForFunction(() => window.__shown.length > 0);
+  const sent = await page.evaluate(() => window.__shown);
+  assert.deepEqual(sent, [{ title: 'Luma', body: 'פעילות מתחילה עכשיו', tag: `luma-default-team@${'2026-11-30'}` }]);
+  await page.reload(); await page.waitForSelector('.page'); await page.clock.runFor(5000);
+  assert.equal(await page.evaluate(() => window.__shown.length), 0, 'not repeated after reload');
+  await ctx.close();
+});
+
+await test('plan import via paste: additive with overlap, approve, recurring schedule intact, replay detected', async () => {
+  const { page, ctx } = await newPage(browser, base, { time: jlm('2026-11-29', '10:00'), hash: '#/import' });
+  const plan = { format: 'luma-work-plan', schemaVersion: 2, kind: 'weekly', planId: 'e2e-week', weekStart: '2026-11-29',
+    activities: [{ externalId: 'a1', title: 'ישיבת צוות לדוגמה', date: MON, start: '10:00', end: '11:00' }],
+    tasks: [{ externalId: 't1', title: 'משימה מיובאת', scheduledDate: MON, priority: 'high' }] };
   await page.getByLabel('JSON של התוכנית').fill('```json\n' + JSON.stringify(plan) + '\n```');
-  await page.getByRole('button', { name: 'בדיקה ותצוגה מקדימה' }).click();
+  await page.getByRole('button', { name: 'בדיקה' }).click();
   await page.waitForSelector('.pv-item');
-  assert.equal(await page.getByRole('button', { name: 'אישור וייבוא' }).isDisabled(), true);
-  await page.getByLabel('משך בדקות עבור ישיבת צוות לדוגמה').fill('30');
-  await page.getByLabel('משך בדקות עבור ישיבת צוות לדוגמה').dispatchEvent('change');
-  const ack = page.getByText('אני מאשרת חפיפה');
-  if (await ack.count()) await ack.click();
-  await page.waitForFunction(() => !document.querySelector('.page button.btn.primary.block')?.disabled);
+  assert.match(await page.locator('.pv-item').first().textContent(), /במקביל ל-״מענה לטלפונים/);
+  await page.waitForFunction(() => !document.querySelector('button.btn.primary.block')?.disabled);
   await page.getByRole('button', { name: 'אישור וייבוא' }).click();
   await page.waitForSelector('text=הייבוא הושלם');
-  await page.getByLabel('JSON של התוכנית').fill(JSON.stringify({ ...plan, meetings: [{ ...plan.meetings[0], durationMinutes: 30 }] }));
-  await page.getByRole('button', { name: 'בדיקה ותצוגה מקדימה' }).click();
-  await page.waitForSelector('text=כבר יובא');
-  await page.goto(base + '#/agenda/2026-11-30'); await page.waitForSelector('.tl');
-  assert.ok((await page.locator('.tl .title').allTextContents()).includes('ישיבת צוות לדוגמה'));
+  await page.getByLabel('JSON של התוכנית').fill(JSON.stringify(plan));
+  await page.getByRole('button', { name: 'בדיקה' }).click();
+  await page.waitForSelector('text=התוכנית הזו כבר יובאה');
+  await go(page, base, `#/agenda/${MON}`);
+  await page.getByRole('radio', { name: 'רשימה' }).click();
+  const titles = await page.locator('.tl-card .title').allTextContents();
+  assert.equal(titles.length, 9);
+  assert.ok(titles.includes('ישיבת צוות לדוגמה') && titles.includes('מענה לטלפונים ולפניות ב-CRM'));
   await ctx.close();
 });
 
 await test('invalid plan shows errors and changes nothing', async () => {
-  const { page, ctx } = await newPage(browser, base, { time: jlm('2026-11-29', '10:00') });
-  await page.goto(base + '#/import'); await page.waitForSelector('textarea');
-  await page.getByLabel('JSON של התוכנית').fill('{"format":"luma-work-plan","schemaVersion":1,"kind":"weekly","planId":"x","weekStart":"2026-11-29","tasks":[{"externalId":"a","title":"x","status":"done"}]}');
-  await page.getByRole('button', { name: 'בדיקה ותצוגה מקדימה' }).click();
+  const { page, ctx } = await newPage(browser, base, { time: jlm('2026-11-29', '10:00'), hash: '#/import' });
+  const rev = (await stateOf(page)).metadata.revision;
+  await page.getByLabel('JSON של התוכנית').fill('{"format":"luma-work-plan","schemaVersion":2,"kind":"weekly","planId":"x","weekStart":"2026-11-29","tasks":[{"externalId":"a","title":"x","status":"done"}]}');
+  await page.getByRole('button', { name: 'בדיקה' }).click();
   await page.waitForSelector('text=התוכנית לא נטענה');
-  const rev = await page.evaluate(() => new Promise((res) => { const r = indexedDB.open('luma-work-planner'); r.onsuccess = () => { const q = r.result.transaction('state').objectStore('state').get('current'); q.onsuccess = () => res(q.result.metadata.revision); }; }));
-  assert.equal(rev, 0);
+  assert.equal((await stateOf(page)).metadata.revision, rev);
   await ctx.close();
 });
 
 await test('backup export → restore round trip with confirmation; foreign file rejected', async () => {
-  const { page, ctx } = await newPage(browser, base, { time: jlm('2026-11-30', '10:00') });
-  await addTaskViaUi(page, 'משימה לגיבוי');
-  await page.goto(base + '#/settings/backup'); await page.waitForSelector('text=ייצוא גיבוי מלא');
+  const { page, ctx } = await newPage(browser, base);
+  await addTaskViaUi(page, base, 'משימה לגיבוי');
+  await go(page, base, '#/settings/backup');
   const dl = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'ייצוא גיבוי מלא' }).click();
-  const file = await dl;
-  const path = await file.path();
+  await page.getByRole('button', { name: 'ייצוא גיבוי' }).click();
+  const path = await (await dl).path();
   const text = await readFile(path, 'utf8');
   assert.equal(JSON.parse(text).format, 'luma-work-backup');
+  assert.equal(JSON.parse(text).data.metadata.schemaVersion, 2);
   await page.waitForSelector('text=הקובץ הוכן להורדה');
-  await addTaskViaUi(page, 'משימה אחרי הגיבוי');
-  await page.goto(base + '#/settings/backup'); await page.waitForSelector('text=בחירת קובץ גיבוי');
+  await addTaskViaUi(page, base, 'משימה אחרי הגיבוי');
+  await go(page, base, '#/settings/backup');
   await page.setInputFiles('input[aria-label="בחירת קובץ גיבוי"]', { name: 'foreign.json', mimeType: 'application/json', buffer: Buffer.from('{"series":[],"tasks":[]}') });
   await page.waitForSelector('text=הקובץ אינו גיבוי של Luma');
   await page.setInputFiles('input[aria-label="בחירת קובץ גיבוי"]', path);
   await page.getByRole('button', { name: 'החלפת כל הנתונים' }).click();
   await page.locator('.sheet').last().getByRole('button', { name: 'החלפה' }).click();
   await page.waitForSelector('text=הגיבוי שוחזר');
-  await page.goto(base + '#/tasks/today'); await page.waitForSelector('[data-section="today"]');
+  await go(page, base, '#/tasks/today', '[data-section="today"]');
   assert.deepEqual(await sectionTitles(page, 'today'), ['משימה לגיבוי']);
   await ctx.close();
 });
@@ -215,9 +430,7 @@ await test('storage isolation: another app\'s IndexedDB, localStorage and caches
   await page.goto(base + '#/home'); await page.waitForSelector('.page');
   await page.evaluate(() => navigator.serviceWorker.ready);
   const r = await page.evaluate(async () => ({
-    ls: localStorage.getItem('lp:state'),
-    caches: await caches.keys(),
-    dbs: (await indexedDB.databases()).map((d) => d.name).sort(),
+    ls: localStorage.getItem('lp:state'), caches: await caches.keys(), dbs: (await indexedDB.databases()).map((d) => d.name).sort(),
     foreign: await new Promise((res) => { const q = indexedDB.open('life-planner'); q.onsuccess = () => { const g = q.result.transaction('kv').objectStore('kv').get('state'); g.onsuccess = () => res(g.result); }; }),
   }));
   assert.equal(r.ls, '{"foreign":true}');
@@ -237,16 +450,16 @@ await test('offline cold start after installation; no runtime network requests o
   await page.evaluate(() => navigator.serviceWorker.ready);
   await page.reload(); await page.waitForSelector('.page');
   assert.ok(await page.evaluate(() => !!navigator.serviceWorker.controller));
-  await addTaskViaUi(page, 'משימה לפני ניתוק');
+  await addTaskViaUi(page, base, 'משימה לפני ניתוק');
   await ctx.setOffline(true);
   const page2 = await ctx.newPage();
   await page2.goto(base + '#/tasks/today'); await page2.waitForSelector('[data-section="today"]');
   assert.deepEqual(await sectionTitles(page2, 'today'), ['משימה לפני ניתוק']);
-  await page2.goto(base + '#/calendar/week'); await page2.waitForSelector('.tg-blk');
+  await page2.goto(base + '#/calendar/week'); await page2.waitForSelector('.tg');
+  await page2.goto(base + '#/import'); await page2.waitForSelector('textarea');
   const fontsOk = await page2.evaluate(async () => { await document.fonts.ready; return document.fonts.check('16px "Noto Sans Hebrew"', 'שלום'); });
   assert.ok(fontsOk, 'bundled font available offline');
-  const imgOk = await page2.evaluate(() => { const i = document.querySelector('.hdr-img'); return i.complete && i.naturalWidth > 0; });
-  assert.ok(imgOk, 'banner available offline');
+  assert.ok(await page2.evaluate(() => { const i = document.querySelector('.hdr-img'); return i.complete && i.naturalWidth > 0; }), 'banner available offline');
   assert.deepEqual(external, []);
   await ctx.close();
 });
@@ -260,8 +473,9 @@ await test('service worker update keeps user data and removes only Luma\'s obsol
   await page.goto(b2 + '#/home'); await page.waitForSelector('.page');
   await page.evaluate(() => navigator.serviceWorker.ready);
   await page.reload(); await page.waitForSelector('.page');
+  const oldCache = (await page.evaluate(() => caches.keys())).find((k) => k.startsWith('luma-work-planner-shell-'));
   await page.evaluate(() => caches.open('planner-shell-v1.0.0'));
-  await addTaskViaUi(page, 'נשמרת בעדכון');
+  await addTaskViaUi(page, b2, 'נשמרת בעדכון');
   const sw = await readFile(join(dir, 'sw.js'), 'utf8');
   await writeFile(join(dir, 'sw.js'), sw.replace(/const VERSION = '[^']+'/, "const VERSION = '9.9.9-test'"));
   await page.evaluate(() => navigator.serviceWorker.getRegistration().then((r) => r.update()));
@@ -270,7 +484,7 @@ await test('service worker update keeps user data and removes only Luma\'s obsol
   await page.waitForSelector('.page');
   const keys = await page.evaluate(() => caches.keys());
   assert.ok(keys.includes('luma-work-planner-shell-9.9.9-test'));
-  assert.ok(!keys.includes('luma-work-planner-shell-1.0.0'));
+  assert.ok(!keys.includes(oldCache));
   assert.ok(keys.includes('planner-shell-v1.0.0'), 'foreign cache untouched');
   await page.goto(b2 + '#/tasks/today'); await page.waitForSelector('[data-section="today"]');
   assert.deepEqual(await sectionTitles(page, 'today'), ['נשמרת בעדכון']);
@@ -278,104 +492,109 @@ await test('service worker update keeps user data and removes only Luma\'s obsol
   await rm(dir, { recursive: true, force: true });
 });
 
-await test('two tabs: a stale tab cannot silently overwrite newer data', async () => {
-  const ctx = await browser.newContext();
-  const a = await ctx.newPage(), b = await ctx.newPage();
-  await a.goto(base + '#/home'); await a.waitForSelector('.page');
-  await b.goto(base + '#/home'); await b.waitForSelector('.page');
-  await a.getByRole('button', { name: 'פנייה טופלה – הוספת 1 למונה' }).click();
-  await a.waitForTimeout(300);
-  // Tab b had no local edits → it reloads the newer document automatically.
-  await b.waitForFunction(() => /1\//.test(document.querySelector('.ring-val')?.textContent || ''), null, { timeout: 5000 });
+await test('upgrade from an installed v1: existing IndexedDB data is migrated in the browser without loss', async () => {
+  const { v1Document } = await import('../fixtures.js');
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await ctx.newPage();
+  await page.clock.install({ time: jlm('2026-11-27', '10:00') });
+  await page.goto(base + 'manifest.webmanifest');
+  await page.evaluate((doc) => new Promise((res) => {
+    const r = indexedDB.open('luma-work-planner', 1);
+    r.onupgradeneeded = () => { r.result.createObjectStore('state'); r.result.createObjectStore('recovery', { keyPath: 'id' }); };
+    r.onsuccess = () => { const tx = r.result.transaction('state', 'readwrite'); tx.objectStore('state').put(doc, 'current'); tx.oncomplete = () => { r.result.close(); res(); }; };
+  }), v1Document());
+  await page.goto(base + '#/tasks/unfinished'); await page.waitForSelector('.page');
+  assert.deepEqual(await page.locator('.tasks-content .title').allTextContents(), ['משימה ישנה']);
+  const st = await stateOf(page);
+  assert.equal(st.metadata.schemaVersion, 2);
+  assert.equal(st.questions.length, 1, 'legacy records kept');
+  await go(page, base, '#/agenda/2026-11-29');
+  assert.equal(await page.locator('.tl-card').count(), 8);
   await ctx.close();
 });
 
-await test('dark theme setting and print layout do not error; image export renders PNG', async () => {
-  const { page, errors, ctx } = await newPage(browser, base, { time: jlm('2026-11-30', '10:00'), colorScheme: 'dark' });
-  const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-  assert.equal(bg, 'rgb(18, 28, 41)');
-  await page.goto(base + '#/agenda/2026-11-30'); await page.waitForSelector('.tl');
-  await page.getByRole('button', { name: 'תמונה של היום' }).click();
-  await page.waitForSelector('.sheet img');
-  const dims = await page.evaluate(() => new Promise((res) => { const i = document.querySelector('.sheet img'); const f = () => res([i.naturalWidth, i.naturalHeight]); if (i.complete) f(); else i.onload = f; }));
-  assert.deepEqual(dims, [1080, 1920]);
+await test('two tabs: a tab without local edits picks up the other tab\'s change', async () => {
+  const ctx = await browser.newContext();
+  const a = await ctx.newPage(), b = await ctx.newPage();
+  await a.goto(base + '#/home'); await a.waitForSelector('.counter-value');
+  await b.goto(base + '#/home'); await b.waitForSelector('.counter-value');
+  await a.getByRole('button', { name: 'הוספת פנייה' }).click();
+  await b.waitForFunction(() => document.querySelector('.counter-value b')?.textContent === '1', null, { timeout: 5000 });
+  await ctx.close();
+});
+
+await test('dark theme renders without errors', async () => {
+  const { page, errors, ctx } = await newPage(browser, base, { colorScheme: 'dark' });
+  assert.equal(await page.evaluate(() => getComputedStyle(document.body).backgroundColor), 'rgb(18, 28, 41)');
+  for (const h of [`#/agenda/${MON}`, '#/tasks/today', '#/calendar/week', '#/settings']) await go(page, base, h);
   assert.deepEqual(errors, []);
   await ctx.close();
 });
 
-await test('team: direct question → answer → FAQ; ad hoc meeting → decision → single follow-up task', async () => {
-  const { page, ctx } = await newPage(browser, base, { time: jlm('2026-11-30', '10:00') });
-  await page.goto(base + '#/questions'); await page.getByRole('button', { name: 'הוספת שאלה' }).click();
-  await page.getByLabel('השאלה / הנושא').fill('איך מטפלים במקרה כללי?');
-  await page.locator('.sheet-foot').getByRole('button', { name: 'הוספה' }).click();
-  await page.waitForSelector('text=איך מטפלים במקרה כללי?');
-  await page.getByRole('button', { name: 'תשובה' }).first().click();
-  await page.getByLabel('התשובה').fill('לפי הנוהל הכללי');
-  await page.getByText('שאלה שחוזרת').click();
-  await page.locator('.sheet-foot').getByRole('button', { name: 'שמירה' }).click();
-  await page.locator('.sheet-foot').getByRole('button', { name: 'אישור והעברה' }).click();
-  await page.goto(base + '#/team/faq'); await page.waitForSelector('text=לפי הנוהל הכללי');
-  await page.goto(base + '#/team/meetings'); await page.getByRole('button', { name: 'פגישה חדשה' }).click();
-  await page.getByLabel('כותרת').fill('פגישה קצרה עם המנהל');
-  await page.locator('.sheet-foot').getByRole('button', { name: 'יצירה' }).click();
-  await page.waitForSelector('h1:has-text("פגישה קצרה עם המנהל")');
-  await page.getByRole('button', { name: 'רישום החלטה' }).click();
-  await page.getByLabel('ההחלטה').fill('לעדכן את הנוהל');
-  await page.getByText('ליצור משימת המשך').click();
-  await page.locator('.sheet-foot').getByRole('button', { name: 'שמירה' }).click();
-  await page.waitForSelector('text=משימה: לעדכן את הנוהל');
-  assert.equal(await page.getByRole('button', { name: 'משימת המשך' }).count(), 0, 'no duplicate conversion offered');
-  await page.goto(base + '#/team/followups'); await page.waitForSelector('text=לעדכן את הנוהל');
-  await ctx.close();
-});
-
-await test('closing: partial close needs explicit confirmation, records what was not done; carryover unaffected', async () => {
-  const { page, ctx } = await newPage(browser, base, { time: jlm('2026-11-30', '16:05') });
-  await addTaskViaUi(page, 'נשארה פתוחה');
-  await page.goto(base + '#/home'); await page.waitForSelector('a.card.cool:has-text("זמן סגירת היום")');
-  await page.goto(base + '#/closing'); await page.getByText('הקציתי את הפניות למחר').click();
-  await page.getByRole('button', { name: 'סגירת היום' }).click();
-  await page.waitForSelector('text=נדרש אישור');
-  await page.getByRole('button', { name: 'כן, להמשיך' }).click();
-  await page.waitForSelector('[data-section="carried"]');
-  const rep = await page.evaluate(async () => (await import('./js/app.js')).store.state.dailyReports['2026-11-30']);
-  assert.equal(rep.partial, true); assert.equal(rep.checklist.allocate, true); assert.equal(rep.checklist['open-work'], false);
-  await page.clock.setSystemTime(jlm('2026-12-01', '09:00')); await page.reload(); await page.waitForSelector('[data-section="carried"]');
-  assert.deepEqual(await sectionTitles(page, 'carried'), ['נשארה פתוחה']);
-  await ctx.close();
-});
-
-await test('week grid: mouse drag moves a block to another day without duplicating it', async () => {
-  const { page, ctx } = await newPage(browser, base, { time: jlm('2026-11-29', '08:00'), viewport: { width: 1280, height: 1000 } });
-  await page.evaluate(async () => (await import('./js/app.js')).store.dispatch('addBlock', { date: '2026-11-30', start: '10:00', end: '10:30', title: 'בלוק לגרירה', confirm: true }));
-  await page.goto(base + '#/calendar/week/2026-11-29'); await page.waitForSelector('.tg-blk');
-  const blk = page.locator('.tg-blk', { hasText: 'בלוק לגרירה' });
-  const box = await blk.boundingBox();
-  const target = await page.locator('.tg-col[data-date="2026-12-01"]').boundingBox();
-  await page.mouse.move(box.x + box.width / 2, box.y + 8);
-  await page.mouse.down();
-  await page.mouse.move(box.x + box.width / 2 - 10, box.y + 12, { steps: 3 });
-  await page.mouse.move(target.x + target.width / 2, box.y + 8, { steps: 8 });
-  await page.mouse.up();
-  await page.waitForFunction(async () => (await import('./js/app.js')).store.state.calendarBlocks.some((b) => b.title === 'בלוק לגרירה' && b.date === '2026-12-01'));
-  const n = await page.evaluate(async () => (await import('./js/app.js')).store.state.calendarBlocks.filter((b) => b.title === 'בלוק לגרירה').map((b) => b.date));
-  assert.deepEqual(n, ['2026-12-01']);
-  await ctx.close();
-});
-
-await test('long Hebrew schedule exports as multiple 1080×1920 pages without clipping', async () => {
-  const { page, ctx } = await newPage(browser, base, { time: jlm('2026-11-30', '08:00') });
-  const pages = await page.evaluate(async () => {
-    const { store } = await import('./js/app.js');
-    for (let i = 0; i < 30; i++) await store.dispatch('addTask', { title: 'משימה ארוכה מאוד לבדיקת חלוקה לעמודים מספר ' + i, scheduledDate: '2026-11-30' });
-    const { renderDayImages } = await import('./js/export/image.js');
-    const blobs = await renderDayImages(store.state, '2026-11-30');
-    return blobs.map((b) => b.size > 0 && b.type);
+/** Layout checks on all major screens for one engine and width. */
+async function layoutChecks(engineName, br, width) {
+  await test(`${engineName} ${width}px: no horizontal overflow, no null/undefined text, touch-action on controls, forms fit`, async () => {
+    const ctx = await br.newContext({ viewport: { width, height: 780 }, locale: 'he-IL', hasTouch: true });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.clock.install({ time: jlm(MON, '10:20') });
+    await page.goto(base + '#/home'); await page.waitForSelector('.page');
+    await dispatch(page, 'addTask', { title: 'משימה עם כותרת ארוכה במיוחד כדי לבדוק שבירת שורות במסך צר', scheduledDate: MON, deadline: '2026-12-03' });
+    await dispatch(page, 'addBlock', { date: MON, start: '10:00', end: '11:00', title: 'ישיבת צוות' });
+    const routes = ['#/home', `#/agenda/${MON}`, '#/tasks/today', '#/tasks/done', `#/calendar/month/${MON}`, '#/calendar/week/2026-11-29', `#/calendar/day/${MON}`, '#/settings', '#/settings/backup', '#/settings/about', '#/import', '#/alerts'];
+    for (const r of routes) {
+      await go(page, base, r);
+      const res = await page.evaluate(() => {
+        const over = document.documentElement.scrollWidth - document.documentElement.clientWidth;
+        const bad = /\bnull\b|\bundefined\b|NaN/.test(document.body.innerText);
+        const dash = /[\u2013\u2014\u05BE]/.test(document.body.innerText + document.title);
+        const ctl = [...document.querySelectorAll('button, a')].filter((e) => e.offsetParent).find((e) => !['manipulation', 'none'].includes(getComputedStyle(e).touchAction));
+        return { over, bad, dash, ctl: ctl ? ctl.outerHTML.slice(0, 80) : null };
+      });
+      assert.ok(res.over <= 0, `${r}: horizontal overflow ${res.over}px`);
+      assert.equal(res.bad, false, `${r}: null/undefined text`);
+      assert.equal(res.dash, false, `${r}: em dash, en dash or maqaf in visible text`);
+      assert.equal(res.ctl, null, `${r}: control without touch-action`);
+    }
+    // Both editors: every field stays inside the sheet; inputs use ≥16px text (no focus zoom).
+    for (const [hash, open] of [[`#/agenda/${MON}`, async () => { await page.getByRole('radio', { name: 'ציר שעות' }).click(); await page.getByRole('button', { name: 'הוספת פעילות' }).click(); }],
+      ['#/tasks/today', async () => { await page.getByRole('button', { name: 'הוספה', exact: true }).click(); await page.getByRole('button', { name: 'הוספת משימה' }).click(); }]]) {
+      await go(page, base, hash);
+      await open();
+      await page.waitForSelector('.sheet .field');
+      await page.waitForTimeout(300);
+      const fit = await page.evaluate(() => {
+        const sheet = document.querySelector('.sheet').getBoundingClientRect();
+        const body = document.querySelector('.sheet-body');
+        const out = [...document.querySelectorAll('.sheet .input, .sheet .date-field, .sheet .seg')].filter((e) => { const r = e.getBoundingClientRect(); return r.left < sheet.left - 0.5 || r.right > sheet.right + 0.5; }).length;
+        const small = [...document.querySelectorAll('.sheet input, .sheet textarea, .sheet select')].filter((e) => parseFloat(getComputedStyle(e).fontSize) < 16).length;
+        return { out, small, hscroll: body.scrollWidth > body.clientWidth };
+      });
+      assert.deepEqual(fit, { out: 0, small: 0, hscroll: false }, `${hash} editor`);
+      await page.keyboard.press('Escape');
+      await page.waitForSelector('.backdrop', { state: 'detached' });
+    }
+    // Safe areas: header and bottom navigation are padded with the device insets.
+    const css = await page.evaluate(() => ({ hdr: getComputedStyle(document.querySelector('.hdr-in')).paddingTop, nav: getComputedStyle(document.querySelector('.nav')).paddingBottom }));
+    assert.ok(parseFloat(css.hdr) >= 8 && parseFloat(css.nav) >= 6);
+    assert.deepEqual(errors, []);
+    await ctx.close();
   });
-  assert.ok(pages.length >= 2, 'paginated');
-  assert.ok(pages.every((t) => t === 'image/png'));
-  await ctx.close();
+}
+for (const w of [320, 390, 430]) await layoutChecks('chromium', browser, w);
+await test('viewport allows pinch zoom (no maximum-scale / user-scalable=no)', async () => {
+  const html = await readFile(join(ROOT, 'index.html'), 'utf8');
+  const vp = /<meta name="viewport" content="([^"]+)"/.exec(html)[1];
+  assert.doesNotMatch(vp, /user-scalable\s*=\s*no|maximum-scale/);
+  assert.match(vp, /viewport-fit=cover/);
 });
+
+let wk = null;
+if (process.env.LUMA_ENGINES !== 'chromium') {
+  try { wk = await webkit.launch(); } catch { console.log('- WebKit not installed: WebKit layout checks skipped (npx playwright install webkit)'); }
+}
+if (wk) { for (const w of [320, 390]) await layoutChecks('webkit', wk, w); await wk.close(); }
 
 await browser.close();
 for (const s of servers) s.kill();

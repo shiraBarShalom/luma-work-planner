@@ -46,3 +46,13 @@ export function registerServiceWorker({ onUpdate, beforeApply }) {
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
   }).catch((e) => console.warn('Service worker registration failed', e));
 }
+
+/** Ask the service worker to look for a new version. @returns {Promise<'available'|'none'|'error'>} */
+export async function checkForUpdate() {
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration?.();
+    if (!reg) return 'error';
+    await reg.update();
+    return reg.installing || reg.waiting ? 'available' : 'none';
+  } catch { return 'error'; }
+}

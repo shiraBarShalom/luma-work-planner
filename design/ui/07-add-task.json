@@ -1,76 +1,46 @@
 {
-  "screenId": "add-task",
-  "title": "הוספת משימה",
+  "screenId": "editors",
+  "title": "הוספת משימה / הוספת פעילות",
   "locale": "he-IL",
   "direction": "rtl",
   "designSystem": "00-design-system.json",
-  "source": {
-    "description": "Modal region of task mockup"
-  },
-  "visualReference": {
-    "observed": [
-      "The reference shows a rounded white modal, X left, title right, one text field, two selectors and blue submit button."
-    ],
-    "exampleDataOnly": true
-  },
-  "layout": {
-    "headerVariant": "secondary",
-    "scroll": "vertical",
-    "navigation": "shared bottom navigation",
-    "activeTab": "tasks",
-    "components": [
-      {
-        "id": "sheet",
-        "type": "bottomSheet",
-        "title": "הוספת משימה",
-        "fields": [
-          {
-            "key": "title",
-            "type": "text",
-            "label": "תיאור המשימה",
-            "required": true
-          },
-          {
-            "key": "priority",
-            "type": "select",
-            "label": "עדיפות",
-            "options": [
-              "גבוהה",
-              "בינונית",
-              "נמוכה"
-            ]
-          },
-          {
-            "key": "dueDate",
-            "type": "date",
-            "label": "תאריך יעד",
-            "required": false
-          }
-        ],
-        "primaryAction": {
-          "label": "הוסף משימה",
-          "action": "saveTask"
-        },
-        "secondaryAction": {
-          "icon": "x",
-          "action": "close"
-        }
-      },
-      {
-        "id": "details",
-        "type": "optionalExpandedFields",
-        "fields": [
-          "category",
-          "executionDate",
-          "estimatedDuration",
-          "notes",
-          "subtasks"
-        ]
-      }
-    ]
-  },
-  "implementationNotes": [
-    "Advanced fields come from the original brief, not visible in the modal.",
-    "Validate required title, preserve draft on accidental dismissal where possible; editing uses same form with populated values."
+  "exampleDataOnly": true,
+  "sheets": [
+    {
+      "id": "task",
+      "fields": [
+        "תיאור המשימה",
+        "עדיפות (segmented: גבוהה, בינונית, נמוכה)",
+        "תאריך ביצוע",
+        "מועד יעד (optional, clearable)",
+        "הערה (optional)"
+      ],
+      "footer": [
+        "מחיקה (editing only)",
+        "הוספה / שמירה"
+      ]
+    },
+    {
+      "id": "activity",
+      "fields": [
+        "כותרת",
+        "תאריך",
+        "התחלה",
+        "סיום",
+        "הערות",
+        "חזרה: ללא חזרה, כל יום, בכל יום עבודה, כל שבוע, חזרה מותאמת אישית (weekday buttons only for this option)"
+      ],
+      "footer": [
+        "מחיקה (editing only)",
+        "הוספה / שמירה"
+      ],
+      "recurringEdit": "asks רק הפעם / גם בפעמים הבאות"
+    }
+  ],
+  "rules": [
+    "dates shown as Hebrew text with the native picker laid over it",
+    "16px input text",
+    "fields never wider than the sheet",
+    "sheet stays above the keyboard"
   ]
 }

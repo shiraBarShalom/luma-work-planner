@@ -1,8 +1,7 @@
 // Recurrence matching for recurring tasks and recurring calendar blocks.
 // Occurrences are never materialized ahead of time: callers test dates lazily within
 // bounded ranges. An occurrence's identity is (seriesId, date).
-import { weekday, weekStart, diffDays, daysInMonth, addDays } from '../dates.js';
-import { LIMITS } from '../config.js';
+import { weekday, weekStart, diffDays, daysInMonth } from '../dates.js';
 
 /**
  * @typedef {Object} Recurrence
@@ -61,16 +60,6 @@ export function matchesRecurrence(r, date, dayInfo) {
   }
 }
 
-/** Matching dates in [from, to], bounded by LIMITS.recurrenceScanDays. */
-export function occurrencesBetween(r, from, to, dayInfo) {
-  const out = [];
-  let start = from < r.startDate ? r.startDate : from;
-  let end = r.endDate && r.endDate < to ? r.endDate : to;
-  if (diffDays(start, end) > LIMITS.recurrenceScanDays) end = addDays(start, LIMITS.recurrenceScanDays);
-  for (let d = start; d <= end; d = addDays(d, 1)) if (matchesRecurrence(r, d, dayInfo)) out.push(d);
-  return out;
-}
-
 /** Validation errors (Hebrew) for a recurrence definition; [] when valid. */
 export function recurrenceErrors(r, isValidDate) {
   const errs = [];
@@ -86,7 +75,7 @@ export function recurrenceErrors(r, isValidDate) {
 }
 
 export function recurrenceLabel(r) {
-  if (!r) return 'חד־פעמי';
+  if (!r) return 'חד-פעמי';
   const DN = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
   const DT = { workday: 'כל יום עבודה', office: 'ימי משרד', home: 'ימי עבודה מהבית', phoneDuty: 'ימי תורנות', nonWorking: 'ימים ללא עבודה' };
   switch (r.kind) {
@@ -95,7 +84,7 @@ export function recurrenceLabel(r) {
       const days = (r.weekdays || []).map((d) => DN[d]).join(' ');
       return (r.interval > 1 ? `כל ${r.interval} שבועות` : 'שבועי') + `: ${days}`;
     }
-    case 'monthly': return `חודשי: ב־${r.monthDay} לחודש${r.monthOverflow === 'lastDay' ? ' (או היום האחרון)' : ''}`;
+    case 'monthly': return `חודשי: ב-${r.monthDay} לחודש${r.monthOverflow === 'lastDay' ? ' (או היום האחרון)' : ''}`;
     case 'dayType': return DT[r.dayType] || 'לפי סוג יום';
     default: return '';
   }

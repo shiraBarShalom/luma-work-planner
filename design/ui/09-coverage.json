@@ -1,25 +1,28 @@
 {
   "canonicalHome": "01a-home-approved.json",
-  "latestMockups": [
-    "01-home.json",
+  "screens": [
+    "01a-home-approved.json",
     "02-agenda.json",
     "03-calendar.json",
-    "04-tasks.json",
-    "05-team-meetings.json",
-    "06-pending-questions.json"
+    "04-tasks.json"
   ],
-  "additionalModal": "07-add-task.json",
-  "notYetIndividuallyMocked": [
-    "inquiryCounter",
-    "statistics",
+  "sheets": "07-add-task.json",
+  "describedInDesignMd": [
     "settings",
-    "focusMode",
-    "endOfDay",
-    "planningImport",
-    "exportAndSharing",
-    "calendarWeek",
-    "calendarDay",
-    "workTools"
+    "planning import",
+    "backup and restore",
+    "alerts (bell)",
+    "quick add"
   ],
-  "note": "These screens were requested earlier but are not among the six latest standalone images. No invented screenshot specifications are represented as observed."
+  "retired": [
+    "team and meetings",
+    "pending questions",
+    "focus mode",
+    "day closing",
+    "reports",
+    "inquiry history",
+    "work tools",
+    "global search"
+  ],
+  "note": "References describe the simplified v2 product. Example data is illustrative only."
 }

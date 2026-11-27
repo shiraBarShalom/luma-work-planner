@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "luma-work-backup.v1.schema.json",
   "title": "Luma full backup (luma-work-backup) v1",
-  "description": "Complete local state envelope. Restoring replaces the whole database after explicit confirmation and a pre-restore recovery snapshot. The `data` document is validated in depth by js/data/validation.js (types, enums, references, non-negative inquiry totals) and migrated by js/data/migrations.js. Not interchangeable with luma-work-plan.",
+  "description": "Complete local state envelope. Restoring replaces the whole database after explicit confirmation and a pre-restore recovery snapshot. The `data` document is validated in depth by js/data/validation.js (types, enums, references, non-negative counter values) and migrated by js/data/migrations.js; state schema versions 1 and 2 are accepted (v1 is migrated on restore, keeping every record). Not interchangeable with luma-work-plan.",
   "type": "object",
   "required": ["format", "backupVersion", "exportedAt", "schemaVersion", "data"],
   "properties": {

@@ -6,6 +6,8 @@ import { createMemoryAdapter, createLocalStorageAdapter } from '../../js/db.js';
 import { createBackup, parseBackup } from '../../js/data/backup.js';
 import { migrateState } from '../../js/data/migrations.js';
 import { createInitialState } from '../../js/seed.js';
+import { v1Document } from '../fixtures.js';
+import { dayOccurrences } from '../../js/engine/schedule.js';
 import { carriedTasks } from '../../js/engine/taskCarryover.js';
 import { LS_FALLBACK_KEY, IDB_NAME, CACHE_PREFIX, LS_PREFIX } from '../../js/config.js';
 
@@ -26,7 +28,7 @@ test('write failure is reported, not hidden; quota error does not pretend succes
   const adapter = createMemoryAdapter();
   const { store } = await makeStore({ adapter });
   adapter.failWith = 'quota';
-  const r = await store.dispatch('addInquiry', { date: '2026-11-30' });
+  const r = await store.dispatch('changeCount', { date: '2026-11-30', delta: 1 });
   assert.equal(r.ok, true);
   assert.equal(await r.saved, false);
   assert.equal(store.status.save, 'error');
@@ -68,7 +70,7 @@ test('external change with no local edits reloads automatically', async () => {
 test('rejected commands leave state unchanged; invariants enforced', async () => {
   const { store } = await makeStore();
   const before = JSON.stringify(store.state);
-  for (const [n, p] of [['addTask', { title: '   ' }], ['setPriorities', { date: '2026-11-30', ids: ['nope'] }], ['addInquiry', { date: '2026-11-30', quantity: 0 }], ['setDayOverride', { date: '2026-11-30', patch: { workStart: '17:00', workEnd: '09:00' } }]]) {
+  for (const [n, p] of [['addTask', { title: '   ' }], ['setPriorities', { date: '2026-11-30', ids: ['nope'] }], ['changeCount', { date: '2026-11-30', delta: -1 }], ['addBlock', { date: '2026-11-30', start: '17:00', end: '09:00', title: 'x' }], ['addBlock', { date: '2026-11-30', start: '09:00', end: '10:00', title: 'x', recurrence: { kind: 'weekly', weekdays: [9] } }]]) {
     const r = await store.dispatch(n, p);
     assert.equal(r.ok, false, n);
   }
@@ -78,9 +80,9 @@ test('rejected commands leave state unchanged; invariants enforced', async () =>
 test('backup round-trip, foreign/plan/newer rejection, restore with recovery snapshot', async () => {
   const adapter = createMemoryAdapter();
   const { store } = await makeStore({ adapter });
-  await must(store.dispatch('addTask', { title: 'גיבוי', scheduledDate: '2026-11-30', subtasks: ['א'] }));
-  await must(store.dispatch('addInquiry', { date: '2026-11-30', quantity: 3 }));
-  await must(store.dispatch('addQuestion', { title: 'ש', audience: 'team' }));
+  await must(store.dispatch('addTask', { title: 'גיבוי', scheduledDate: '2026-11-30' }));
+  await must(store.dispatch('changeCount', { date: '2026-11-30', delta: 1 }));
+  await must(store.dispatch('addBlock', { date: '2026-11-30', start: '07:00', end: '07:30', title: 'חוזרת', recurrence: { kind: 'daily', interval: 1 } }));
   const text = JSON.stringify(createBackup(store.state, '2026-11-30T10:00:00Z'));
   const parsed = parseBackup(text);
   assert.ok(parsed.ok);
@@ -110,7 +112,7 @@ test('backup round-trip, foreign/plan/newer rejection, restore with recovery sna
 
 test('migrations: newer versions fail safely; registry runs sequentially and validates output', () => {
   const s = createInitialState('2026-11-30T08:00:00Z');
-  assert.throws(() => migrateState({ ...s, metadata: { ...s.metadata, schemaVersion: 2 } }), (e) => e.code === 'newer');
+  assert.throws(() => migrateState({ ...s, metadata: { ...s.metadata, schemaVersion: 3 } }), (e) => e.code === 'newer');
   assert.throws(() => migrateState({ foo: 1 }), (e) => e.code === 'foreign');
   const old = structuredClone(s); old.metadata.schemaVersion = 1; delete old.dayNotes;
   const migrations = { 1: (d) => { d.dayNotes = {}; return d; } };
@@ -145,4 +147,34 @@ test('degraded localStorage adapter is namespaced and revision-checked', async (
 test('storage namespaces are unique to Luma', () => {
   for (const v of [IDB_NAME, CACHE_PREFIX, LS_PREFIX]) assert.match(v, /^luma-work-planner/);
   for (const v of [IDB_NAME, CACHE_PREFIX, LS_PREFIX]) assert.ok(!/^life-planner|^planner-shell-|^lp:/.test(v));
+});
+
+test('a v1 backup restores into v2 with every record kept', () => {
+  const v1 = v1Document();
+  const text = JSON.stringify({ format: 'luma-work-backup', backupVersion: 1, exportedAt: '2026-11-24T15:00:00.000Z', app: { id: 'luma-work-planner', version: '1.0.0' }, schemaVersion: 1, revision: 41, counts: {}, data: v1 });
+  const res = parseBackup(text);
+  assert.ok(res.ok, res.message);
+  assert.equal(res.info.schemaVersion, 1);
+  assert.ok(res.info.migrated);
+  assert.equal(res.state.metadata.schemaVersion, 2);
+  for (const c of ['tasks', 'questions', 'meetings', 'workNotes', 'inquiryLogs']) assert.equal(res.state[c].length, v1[c].length, c);
+  assert.equal(dayOccurrences(res.state, '2026-11-24')[0].status, 'done');
+});
+
+test('application update: a v1 database is migrated on start with a recovery copy, data preserved', async () => {
+  const adapter = createMemoryAdapter();
+  adapter._externalWrite(v1Document());
+  const clock = fakeClock('2026-11-27');
+  const s = createStore({ adapter, now: clock.now, uid: testUid });
+  const r = await s.init();
+  assert.equal(r.migrated, true);
+  assert.equal((await adapter.load()).metadata.schemaVersion, 2, 'migrated document persisted');
+  const rec = await s.listRecovery();
+  assert.ok(rec.some((x) => /לפני שדרוג נתונים מגרסה 1/.test(x.reason)), 'pre-migration copy kept');
+  assert.equal((await s.getRecovery(rec[0].id)).state.metadata.schemaVersion, 1);
+  assert.equal(s.state.tasks.length, 1);
+  assert.equal(dayOccurrences(s.state, '2026-11-29').length, 8);
+  const s2 = createStore({ adapter, now: clock.now, uid: testUid });
+  assert.equal((await s2.init()).migrated, false, 'second start: nothing to migrate');
+  assert.equal(s2.state.calendarBlocks.length, s.state.calendarBlocks.length);
 });

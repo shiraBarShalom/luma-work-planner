@@ -1,8 +1,8 @@
-# CLAUDE.md — Luma Engineering Instructions
+# CLAUDE.md - Luma Engineering Instructions
 
 ## 1. Project contract
 
-Luma (לומה) is a Hebrew, RTL, mobile-first, offline-first personal work planner. `ARCHITECTURE.md` in the repository root is the normative product and technical specification. Read it in full before making substantive changes. This file defines durable engineering rules for implementing, testing, and maintaining that product.
+Luma (לומה) is a Hebrew, RTL, mobile-first, offline-first personal work planner. Since v2 it is deliberately minimal: Home (date, current activity, inquiry counter, three important tasks), Agenda, Tasks, Calendar and a short Settings screen. Simplicity is the primary success criterion: no explanatory text for obvious interactions, no duplicate dates/titles/buttons, no dashboards. `ARCHITECTURE.md` in the repository root is the normative product and technical specification. Read it in full before making substantive changes. This file defines durable engineering rules for implementing, testing, and maintaining that product.
 
 Follow explicit user requirements first, then the architecture and this file. If a material conflict exists, surface it rather than silently inventing a new requirement. Keep this file and the architecture current when an approved decision changes the contract. Implement the visual handoff in `design/DESIGN.md`, `design/ui/` and `design/assets/`. The architecture is authoritative for behavior; the visual references are authoritative for approved appearance only. Keep domain logic independent from styling. Code, internal documentation, tests and comments should be in English; the user-facing interface, error messages, instructions and exports should be natural Hebrew with correct RTL behavior.
 
@@ -22,11 +22,13 @@ Do not stop after writing a plan, a mock screen, a checklist of TODOs or a parti
 
 - Plain HTML, CSS and JavaScript ES modules; no required build step, no production framework or runtime dependency unless explicitly approved. Development-only test tooling is acceptable and must not be required by the deployed app.
 - No application server, cloud data store, account/auth requirement, cloud sync, AI API, secret keys, telemetry, external runtime font dependency, or automatic submission to other systems. Static hosting over HTTPS is allowed.
-- All ordinary app features, including JSON plan import, reports, backup and recovery, must work locally after successful initial app caching. External ChatGPT dictation/formatting is optional and outside the app's offline guarantee.
+- All ordinary app features, including JSON plan import, backup and recovery, must work locally after successful initial app caching. External ChatGPT dictation/formatting is optional and outside the app's offline guarantee.
 - Store personal application state in IndexedDB, not Service Worker Cache Storage. Handle persistence errors without pretending success. A localStorage fallback is degraded mode, not an independent competing source of truth.
 - No real personal records, confidential material, backups, case identifiers or credentials in code, test fixtures, screenshots, commits, prompts or logs. Use fictional examples and aggregate counts. Do not inspect unrelated private files to create test data.
-- All product rules that are configurable in the architecture must actually be editable. Never hard-code today's workday, Thursday location, phone duty, a daily target, or a closing hour into feature logic. Seed defaults in configuration and read effective settings through selectors.
-- No motivational quotes, unrelated personal-life features, project management, or forced gamification. Do not invent organizational procedures or integrations. Do not implement formal team meetings as seeded recurring events.
+- The fixed weekly schedule is seed data made of ordinary recurring activities (stable IDs, editable by the user), never hard-coded logic. The daily target is configuration read through selectors. Do not reintroduce phone duty, office/home locations, day templates, categories, team/manager questions, a notebook, day closing, reports, global search or a planner as user-facing features without an approved requirement.
+- No motivational quotes, unrelated personal-life features, project management, or forced gamification. Do not invent organizational procedures or integrations.
+- Recurring activities are automatically protected: no automated process (import, undo of import, future automation) may move, resize, remove, replace, cancel or change the recurrence of one. Flag such commands `automated`; the store rejects them if the recurring signature changes. Only explicit manual edits change recurring activities.
+- Activity overlaps are allowed and never require resolution; never move or shorten an activity to make room.
 - No false offline, security, browser-storage permanence, notification or iPhone capability guarantees. Local storage is not encryption and does not survive every reset/eviction.
 
 ## 4. Architecture boundaries
@@ -34,7 +36,7 @@ Do not stop after writing a plan, a mock screen, a checklist of TODOs or a parti
 Keep the app a small modular monolith. Organize modules by responsibility, not artificially by file count:
 
 - `views` and UI helpers render selectors and dispatch commands; they do not own canonical business state or write to persistence directly.
-- Domain engines own deterministic rules for dates, effective schedules, recurrence, carryover, inquiries, team/meetings, planner, closing and reports. Keep these functions DOM-free and inject clock/configuration where useful.
+- Domain engines own deterministic rules for dates, schedules and recurrence, carryover, the inquiry counter and alerts. Keep these functions DOM-free and inject clock/configuration where useful.
 - The store owns commands, state transitions, invariants, subscriptions, transactions/revisions and bounded undo. A multi-record conversion/import must commit atomically or not at all.
 - Data modules own schema validation, migration, persistence, backup and import. Export modules consume read-only selectors. The service worker owns the static app shell only.
 - Avoid circular imports, duplicated state, implicit globals and side effects during module import. Favor clear named exports, meaningful names, small pure helpers, consistent errors and JSDoc for non-obvious data shapes. Do not add generalized abstractions without a demonstrated need.
@@ -45,14 +47,13 @@ Use the suggested responsibility map in `ARCHITECTURE.md` as a guide. Do not cre
 
 All edits flow through validated commands. Each entity has a stable ID; relationships are ID references, not copied objects. Keep a versioned canonical state document, monotonically increasing revision and explicit update timestamps. Derived views/selectors are computed, not separate mutable copies.
 
-- **Effective day:** resolve defaults/templates, weekly overrides, day overrides and explicit edits in a consistent precedence order. Location, duty status and schedule are independent. Past/closed history is not silently changed by template edits. Preserve manual and pinned blocks.
+- **Schedule:** occurrences come from recurring and one-off activities (and legacy routine templates only before `settings.routineEndsOn`). Past history is never rewritten by "from now on" edits. Legacy data (templates, day overrides) stays readable.
 - **Dates:** canonical local dates are `YYYY-MM-DD`, times `HH:MM`, zone `Asia/Jerusalem`. Use explicit timezone formatting for now/today and UTC date-only arithmetic. Do not use `new Date('YYYY-MM-DD')` followed by local accessors as a calendar arithmetic shortcut. Use explicit UTC instants for audit timestamps. Validate leap days, invalid dates/times, week boundaries, DST and month/year changes.
 - **Recurrence:** stable occurrence identifiers, explicit exceptions and future-series edits. Moving an occurrence must not leave a duplicate source occurrence. No infinite materialization. No retroactive destruction of completion history.
-- **Carryover:** compute unfinished work from dates/statuses on open/resume/date change and relevant edits. Do not clone tasks nightly or depend on timers while the app is closed. Preserve original date and deadline. Respect workdays, waiting and deferral, and no carryover for routine checklists. Show the required `משימות שלא הסתיימו עד היום` section separately from new tasks on Today and Tasks; completion updates all views consistently. Never make the section optional.
-- **Inquiry counts:** derive from count/correction events. Never allow negative totals; allow over-target totals. Separate completion, allocation, transfer and other dispositions. Preserve historical targets; no automatic shortfall debt.
-- **Team and meetings:** unanswered questions remain open without requiring a scheduled meeting. Decision-to-task and question-to-FAQ conversions retain provenance, avoid duplicate actions and commit together. No external ticket creation or case handling.
-- **Planning:** deterministic local proposals only. Respect deadlines, capacity, pinned/manual edits, work hours, fixed meetings and protected breaks. Show conflicts and unallocated work. A preview never mutates state; approved changes are explicit and undoable where safe.
-- **Closing and reports:** derive closing UI from actual schedule; partial or missed closure does not lose work. Do not confuse task completion, block completion and checklist completion. Report missing actual minutes as unknown, preserve historic target/context, avoid double counting and disclose live versus snapshot metrics.
+- **Carryover:** compute unfinished work from dates/statuses on open/resume/date change and relevant edits. Do not clone tasks nightly or depend on timers while the app is closed. Preserve original date and deadline. Respect workdays, waiting and deferral, and no carryover for routine checklists. Show the required `משימות שלא הסתיימו עד היום` section separately from `משימות להיום` on the Tasks screen (not on Home); completion updates all views consistently. Never make the section optional.
+- **Inquiry counter:** one non-negative integer per local date in `inquiryCounts` (no record per tap); +1/−1/reset; never negative; over-target allowed; new date starts at zero; historical targets preserved. Legacy count events stay untouched.
+- **Retired features:** questions, meetings, FAQ, issues, notes, day reports and count events remain in the document and backups as a recoverable archive; never delete them in a migration and never add a screen for them unless approved.
+- **Notifications:** request permission only from a tap; never claim background delivery; reminders run only while the app is open, at most once per occurrence, with generic lock-screen text by default.
 
 When deleting an entity, prevent orphan references through archival, explicit unlinking or deliberate validated cascade as appropriate. Never silently destroy independent records.
 
@@ -68,8 +69,9 @@ Backup and plan import are separate formats and actions. Keep bounded recovery s
 
 Keep the versioned JSON Schema, semantic validator, import engine, tests and generated ChatGPT instructions aligned. A schema change is incomplete until all corresponding contracts are updated. The exact v1 planning fields and import behavior are in `ARCHITECTURE.md`.
 
+- Plan imports are additive (v2: `activities`, `tasks`). They never change recurring activities and never require resolving overlaps. v1 files stay accepted; their obsolete parts are listed in the preview, not silently dropped.
 - Accept paste or local JSON file; validate types, bounded sizes, dates, enums, IDs, relationships, timing and unknown fields. Use safe JSON parsing and property handling; no eval, code execution, HTML injection or unrestricted deep merging.
-- Treat unknown duration/deadline as unknown. Prompt templates must instruct ChatGPT not to invent values and to output only schema-compatible JSON. Generate context from current non-sensitive settings and target planning date/week; do not automatically serialize private notes/tasks or historical records into a prompt.
+- Treat unknown duration/deadline as unknown. Prompt templates must state that the fixed schedule already exists, ask only for additional activities and tasks, and instruct ChatGPT not to invent values and to output only schema-compatible JSON. Generate context from current non-sensitive settings and target planning date/week; do not automatically serialize private notes/tasks or historical records into a prompt.
 - Produce a read-only preview with proposed additions/updates, duplicates, conflicts, missing data and exclusions. Require explicit approval. Apply validated changes in a transaction with recovery and import history. An error or cancellation before commit leaves the state untouched.
 - Stable `planId` and external IDs, canonical fingerprints and replay handling must prevent exact duplicate imports. Changed same-ID content previews a proposed update; likely semantic duplicates with different IDs require review. Preserve manually changed records unless the user explicitly approves the overwrite.
 - Do not let plan imports replace the database, issue delete commands, manufacture completed tasks/counts, execute commands or request external data. Full backup restore requires separate explicit replacement confirmation and migration/validation.
@@ -78,9 +80,11 @@ Keep the versioned JSON Schema, semantic validator, import engine, tests and gen
 
 Build mobile-first in Hebrew using the supplied Luma design system and visual references. Set `lang="he"` and `dir="rtl"` appropriately. Use logical CSS properties for spacing and alignment, correct bidirectional handling for dates, times and English tokens, safe-area insets, scalable typography, sufficient contrast and visible focus. Keep primary controls touch-friendly (aim for at least 44 CSS px), keyboard-accessible, and properly labeled. Do not rely solely on color, drag gestures or hover. Supply edit controls as an alternative to dragging/resizing. Use accessible modal/sheet focus handling and Escape/close actions; restore focus. Prevent destructive actions from accidental taps.
 
-Prioritize direct task/question entry, one-tap count changes, easy completion, clear current/next activity, and discoverable review/closing. Do not require all optional fields on creation. Show loading, empty, error, offline and storage-failure states honestly. Avoid excessive popups and unnecessary animations. Respect reduced motion and light/dark preferences. Do not represent a visual placeholder as a working feature. If a control is present it must work, or be explicitly labeled unavailable with a meaningful reason.
+Prioritize direct task and activity entry, one-tap count changes, easy completion and a clear current/next activity. Do not require optional fields on creation. Use `touch-action: manipulation` on controls (keep pinch zoom), ≥16px form text, safe-area insets and keyboard-aware sheets; nothing may overflow horizontally at 320-430 px. Never render `null`/`undefined` (use `setChildren`, never `replaceChildren` with possibly-null children). Show loading, empty, error, offline and storage-failure states honestly. Avoid excessive popups and unnecessary animations. Respect reduced motion and light/dark preferences. Do not represent a visual placeholder as a working feature. If a control is present it must work, or be explicitly labeled unavailable with a meaningful reason.
 
-Use safe DOM APIs (`textContent`, safe element creation); do not render user/import strings with `innerHTML`. Sanitize filenames/CSV cells, handle spreadsheet formula injection, preserve Hebrew text in PNG/print/CSV and support browser share/download/copy fallbacks without false success notifications.
+Typography: user-facing text uses only the standard short hyphen (-) - never the em dash (U+2014), en dash (U+2013) or Hebrew maqaf (U+05BE). This covers titles, labels, default schedule titles and notes, date and time ranges (`09:00-13:00`), buttons, menus, notifications, settings, dialogs, validation messages and the generated ChatGPT instructions. Do not rewrite user-entered data. `tests/unit/typography.test.js` and the browser layout checks enforce it.
+
+Use safe DOM APIs (`textContent`, safe element creation); do not render user/import strings with `innerHTML`. Sanitize file names and support browser share/download/copy fallbacks without false success notifications.
 
 ## 9. PWA and deployment rules
 
@@ -91,7 +95,7 @@ Use safe DOM APIs (`textContent`, safe element creation); do not render user/imp
 
 ## 10. Testing and definition of done
 
-The test matrix in `ARCHITECTURE.md` is mandatory coverage guidance. Use dependency-light automated unit tests for deterministic engines, integration tests for store/import/migrations, and browser tests for important UI, offline and export workflows. Use the repository's existing test runner when practical; otherwise document a reproducible dev-only runner. Use fake clocks and synthetic fixtures; do not depend on today's real date or external services for tests.
+The test matrix in `ARCHITECTURE.md` is mandatory coverage guidance. Use dependency-light automated unit tests for deterministic engines, integration tests for store/import/migrations, and browser tests for important UI, offline, backup and import workflows. Use the repository's existing test runner when practical; otherwise document a reproducible dev-only runner. Use fake clocks and synthetic fixtures; do not depend on today's real date or external services for tests.
 
 Minimum quality gates before declaring a feature complete:
 
