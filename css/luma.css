@@ -73,6 +73,7 @@ a, button, input, select, textarea, label, summary, .cb, .seg, .nav, .tg { touch
 .page > * { min-width: 0; }
 .splash { min-height: 100vh; display: grid; place-content: center; gap: 12px; text-align: center; color: var(--primary); }
 .splash .wordmark { font-size: 2.2rem; color: var(--primary); }
+.noscript { padding: 24px; }
 
 /* header */
 .hdr { position: relative; overflow: hidden; color: #FFFFFF; background: #284A66; isolation: isolate; flex: none; }

@@ -35,7 +35,7 @@ One number per day (Asia/Jerusalem). + adds one, − removes one (never below ze
 
 ## Notifications
 
-On iPhone, notifications are available after adding Luma to the Home Screen (iOS 16.4+). After you tap `הפעלת התראות`, Luma can remind you when each activity starts - **only while Luma is open**; iOS does not run web apps in the background, and Luma has no push server. Reminders are sent once per activity and show generic text on the lock screen unless you choose to show titles. See [`docs/NOTIFICATIONS.md`](docs/NOTIFICATIONS.md) for options to get reminders while the phone is locked.
+On iPhone, notifications are available after adding Luma to the Home Screen (iOS 16.4+). After you tap `הפעלת התראות`, Luma can remind you when each activity starts - **only while Luma is open**; iOS does not run web apps in the background, and by design Luma uses no push server. Reminders are sent once per activity and show generic text on the lock screen unless you choose to show titles. For reminders while Luma is closed, set up the fixed schedule once in Shortcuts or Calendar on the phone: see [`docs/NOTIFICATIONS.md`](docs/NOTIFICATIONS.md).
 
 ## Run locally
 
@@ -43,7 +43,7 @@ Requires Node.js 18+ for the dev server and tests (the app itself has no build s
 
 ```bash
 npm install          # dev-only: Playwright for browser tests
-npm start            # http://localhost:8080/luma/
+npm start            # http://localhost:8080/luma/ (this computer only; HOST=0.0.0.0 to allow the local network)
 ```
 
 The dev server serves the app under `/luma/` to prove that all paths work from a subdirectory. Service workers require `http://localhost` or HTTPS.
@@ -72,6 +72,7 @@ WebKit (Safari engine) checks run when `npx playwright install webkit` has been 
 - If IndexedDB is unavailable, Luma runs in a labeled limited mode (`localStorage`). Unreadable, foreign or newer-version data is never replaced with defaults.
 - Upgrading from 1.x migrates the data automatically on first start and keeps a recovery copy of the old version. Features removed in 2.0 (team and manager questions, meetings, FAQ, notebook, issue log, day closing, detailed inquiry log) keep their records in the data and in backups; they are just not shown.
 - Namespaces: IndexedDB `luma-work-planner`, localStorage prefix `luma-work-planner:`, Cache Storage prefix `luma-work-planner-shell-`, service-worker scope `./`, manifest id `./?app=luma-work-planner`.
+- Security guarantees, limitations and the latest audit: [`SECURITY.md`](SECURITY.md). Note that browser storage is per origin and Luma's GitHub Pages origin is shared with the account's other Pages sites.
 - Browser storage is not encryption and not a backup. Export backups regularly and keep them off the device. Store only generic work descriptions and counts.
 
 ## Formats

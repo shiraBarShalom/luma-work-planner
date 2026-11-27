@@ -21,6 +21,7 @@ Do not stop after writing a plan, a mock screen, a checklist of TODOs or a parti
 ## 3. Non-negotiable constraints
 
 - Plain HTML, CSS and JavaScript ES modules; no required build step, no production framework or runtime dependency unless explicitly approved. Development-only test tooling is acceptable and must not be required by the deployed app.
+- No push server or notification service either: the owner decided (27 Nov 2026) that privacy outweighs background notifications. Local iPhone options are documented in `docs/NOTIFICATIONS.md`.
 - No application server, cloud data store, account/auth requirement, cloud sync, AI API, secret keys, telemetry, external runtime font dependency, or automatic submission to other systems. Static hosting over HTTPS is allowed.
 - All ordinary app features, including JSON plan import, backup and recovery, must work locally after successful initial app caching. External ChatGPT dictation/formatting is optional and outside the app's offline guarantee.
 - Store personal application state in IndexedDB, not Service Worker Cache Storage. Handle persistence errors without pretending success. A localStorage fallback is degraded mode, not an independent competing source of truth.
@@ -83,6 +84,8 @@ Build mobile-first in Hebrew using the supplied Luma design system and visual re
 Prioritize direct task and activity entry, one-tap count changes, easy completion and a clear current/next activity. Do not require optional fields on creation. Use `touch-action: manipulation` on controls (keep pinch zoom), ≥16px form text, safe-area insets and keyboard-aware sheets; nothing may overflow horizontally at 320-430 px. Never render `null`/`undefined` (use `setChildren`, never `replaceChildren` with possibly-null children). Show loading, empty, error, offline and storage-failure states honestly. Avoid excessive popups and unnecessary animations. Respect reduced motion and light/dark preferences. Do not represent a visual placeholder as a working feature. If a control is present it must work, or be explicitly labeled unavailable with a meaningful reason.
 
 Typography: user-facing text uses only the standard short hyphen (-) - never the em dash (U+2014), en dash (U+2013) or Hebrew maqaf (U+05BE). This covers titles, labels, default schedule titles and notes, date and time ranges (`09:00-13:00`), buttons, menus, notifications, settings, dialogs, validation messages and the generated ChatGPT instructions. Do not rewrite user-entered data. `tests/unit/typography.test.js` and the browser layout checks enforce it.
+
+Keep the CSP strict (`script-src 'self'`, `style-src 'self'` without `'unsafe-inline'`, `connect-src 'self'`, no other origins); set styles through CSSOM, never `style="..."` markup. Never write work text (titles, notes, search queries) to localStorage; it belongs only in the IndexedDB document. Pin GitHub Actions to commit SHAs and keep workflow permissions per job. Record audit results in `SECURITY.md`.
 
 Use safe DOM APIs (`textContent`, safe element creation); do not render user/import strings with `innerHTML`. Sanitize file names and support browser share/download/copy fallbacks without false success notifications.
 

@@ -15,13 +15,17 @@ const MORE = [
   ['waiting', 'ממתינות לתשובה'], ['deferred', 'נדחו'], ['canceled', 'בוטלו'],
 ];
 const FILTERS = new Set([...MAIN.map((m) => m.value), ...MORE.map((m) => m[0])]);
+// The search text is kept in memory for this session only: it may contain work details
+// and must not be copied outside the app's own data store.
+let searchText = '';
+
 const SORTS = [{ value: 'high', label: 'עדיפות: מהגבוהה לנמוכה' }, { value: 'low', label: 'עדיפות: מהנמוכה לגבוהה' }];
 
 export function render(main, args, ctx) {
   const state = S();
   const date = ctx.date;
   const filter = FILTERS.has(args[0]) ? args[0] : 'today';
-  const search = input('search', loadUi('taskSearch', ''), { placeholder: 'חיפוש', 'aria-label': 'חיפוש במשימות', enterkeyhint: 'search' });
+  const search = input('search', searchText, { placeholder: 'חיפוש', 'aria-label': 'חיפוש במשימות', enterkeyhint: 'search' });
   const sort = select(SORTS, loadUi('taskSort', 'high'), { 'aria-label': 'מיון לפי עדיפות' });
   const content = h('div.stack.tasks-content');
   const draw = () => {
@@ -48,7 +52,7 @@ export function render(main, args, ctx) {
     }
     content.replaceChildren(...parts.filter(Boolean));
   };
-  search.addEventListener('input', () => { saveUi('taskSearch', search.value); draw(); });
+  search.addEventListener('input', () => { searchText = search.value; draw(); });
   sort.addEventListener('change', () => { saveUi('taskSort', sort.value); draw(); });
   draw();
   const more = iconBtn('more', 'מסננים נוספים', async () => {

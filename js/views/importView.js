@@ -81,6 +81,7 @@ function previewCard() {
   const status = h('div', { 'aria-live': 'polite' });
   const approve = btn('אישור וייבוא', () => apply(), 'primary block', 'check');
   const refresh = () => {
+    if (!session.preview || !approve.isConnected) return; // the preview was applied or replaced meanwhile
     const r = resolveSelection(session.preview, session.selection, session.resolutions);
     approve.disabled = !r.ok;
     setChildren(status, r.ok ? h('p.small', `ייובאו ${r.items.length} פריטים.`) : h('ul.small.form-error', r.errors.map((e) => h('li', e.message))));

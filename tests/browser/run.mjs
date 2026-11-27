@@ -451,6 +451,33 @@ await test('backup export → restore round trip with confirmation; foreign file
   await ctx.close();
 });
 
+await test('security: hostile text from an import renders as text; search never reaches localStorage; retired keys purged', async () => {
+  const { page, ctx, errors } = await newPage(browser, base, { hash: '#/import' });
+  await page.addInitScript(() => { window.__pwned = 0; });
+  await page.evaluate(() => { localStorage.setItem('luma-work-planner:ui', JSON.stringify({ taskSearch: 'old private query', taskSort: 'low' })); });
+  const evil = '<img src=x onerror="window.__pwned=1">';
+  const plan = { format: 'luma-work-plan', schemaVersion: 2, kind: 'dailyPatch', planId: 'xss', activities: [{ externalId: 'a', title: evil, date: MON, start: '15:00', end: '15:30', notes: '<script>window.__pwned=2</script>' }], tasks: [{ externalId: 't', title: evil, scheduledDate: MON, notes: '<svg onload="window.__pwned=3">' }] };
+  await page.getByLabel('JSON של התוכנית').fill(JSON.stringify(plan));
+  await page.getByRole('button', { name: 'בדיקה' }).click();
+  await page.waitForSelector('.pv-item');
+  await page.getByRole('button', { name: 'אישור וייבוא' }).click();
+  await page.waitForSelector('text=הייבוא הושלם');
+  for (const h of [`#/agenda/${MON}`, '#/tasks/today', '#/home']) { await page.reload(); await go(page, base, h); }
+  await go(page, base, `#/agenda/${MON}`);
+  await page.getByRole('radio', { name: 'רשימה' }).click();
+  assert.ok((await page.locator('.tl-card .title').allTextContents()).includes(evil), 'shown literally');
+  await go(page, base, '#/tasks/today', '[data-section="today"]');
+  assert.deepEqual(await sectionTitles(page, 'today'), [evil]);
+  assert.equal(await page.evaluate(() => document.querySelectorAll('main img, main script, main svg[onload]').length), 0, 'no injected elements');
+  assert.equal(await page.evaluate(() => window.__pwned), 0, 'no script ran');
+  await page.getByLabel('חיפוש במשימות').fill('מילה פרטית');
+  const ls = await page.evaluate(() => JSON.stringify(localStorage));
+  assert.doesNotMatch(ls, /מילה פרטית|old private query|taskSearch/);
+  assert.match(ls, /taskSort/, 'harmless view preferences remain');
+  assert.deepEqual(errors, [], JSON.stringify(errors));
+  await ctx.close();
+});
+
 await test('storage isolation: another app\'s IndexedDB, localStorage and caches on the same origin stay untouched', async () => {
   const ctx = await browser.newContext({ serviceWorkers: 'allow' });
   const page = await ctx.newPage();
@@ -573,6 +600,7 @@ async function layoutChecks(engineName, br, width) {
     const page = await ctx.newPage();
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
+    await page.addInitScript(() => { window.__csp = []; document.addEventListener('securitypolicyviolation', (e) => window.__csp.push(`${e.violatedDirective} ${e.blockedURI}`)); });
     await page.clock.install({ time: jlm(MON, '10:20') });
     await page.goto(base + '#/home'); await page.waitForSelector('.page');
     await dispatch(page, 'addTask', { title: 'משימה עם כותרת ארוכה במיוחד כדי לבדוק שבירת שורות במסך צר', scheduledDate: MON, deadline: '2026-12-03' });
@@ -591,6 +619,7 @@ async function layoutChecks(engineName, br, width) {
       assert.equal(res.bad, false, `${r}: null/undefined text`);
       assert.equal(res.dash, false, `${r}: em dash, en dash or maqaf in visible text`);
       assert.equal(res.ctl, null, `${r}: control without touch-action`);
+      assert.deepEqual(await page.evaluate(() => window.__csp), [], `${r}: Content-Security-Policy violation`);
     }
     // Both editors: every field stays inside the sheet; inputs use ≥16px text (no focus zoom).
     for (const [hash, open] of [[`#/agenda/${MON}`, async () => { await page.getByRole('radio', { name: 'ציר שעות' }).click(); await page.getByRole('button', { name: 'הוספת פעילות' }).click(); }],
