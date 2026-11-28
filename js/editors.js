@@ -177,6 +177,22 @@ export function openTaskEditor(task = null, { date = nowCtx().date, defaults = {
   return sh;
 }
 
+/**
+ * The greeting name: one field, opened by tapping the greeting. Stored only in this
+ * device's local data (and in backups); an empty value removes the name.
+ */
+export function openNameEditor() {
+  const name = input('text', S().settings.displayName || '', { maxlength: 40, autocomplete: 'off', autofocus: true, enterkeyhint: 'done', 'aria-label': 'שם' });
+  const save = async () => {
+    const v = name.value.trim();
+    if (v === (S().settings.displayName || '')) { sh.close(true); return; }
+    if (await run('updateSettings', { patch: { displayName: v } }, { success: v ? 'השם נשמר' : 'השם הוסר' })) sh.close(true);
+  };
+  name.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } });
+  const sh = openSheet({ title: 'שם בברכה', body: [field('שם', name)], footer: [btn('שמירה', save, 'primary')] });
+  return sh;
+}
+
 /** Quick add from the header: a task or an activity. */
 export async function quickAdd(date = nowCtx().date) {
   const v = await choose('הוספה', [

@@ -42,6 +42,12 @@
 
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+/* App-like stability: no double-tap zoom anywhere (pinch zoom stays available), no
+   sideways drift of the page and no rubber-band bounce of the whole screen. Inner
+   scrollers keep their own scrolling. */
+html, body { touch-action: manipulation; overflow-x: clip; overscroll-behavior: none; }
+.confetti { position: fixed; inset: 0; pointer-events: none; z-index: 60; overflow: hidden; }
+.confetti span { position: fixed; width: 7px; height: 10px; border-radius: 2px; opacity: 0; }
 body {
   margin: 0; font-family: var(--font); font-size: 1rem; line-height: 1.5; color: var(--text); background: var(--bg);
   -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; font-variant-numeric: tabular-nums;
@@ -89,6 +95,8 @@ a, button, input, select, textarea, label, summary, .cb, .seg, .nav, .tg { touch
 .hdr-btn { position: relative; width: 44px; height: 44px; border-radius: 22px; border: 0; display: grid; place-items: center; cursor: pointer; color: #FFFFFF; background: rgba(255, 255, 255, 0.18); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 .hdr-btn .badge { position: absolute; top: 4px; inset-inline-end: 4px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--champagne); color: #3A2A10; font-size: 0.6875rem; font-weight: 700; display: grid; place-items: center; }
 .greeting { margin-top: auto; font-size: 1.625rem; font-weight: 600; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.4); }
+button.greeting { align-self: flex-start; min-height: 44px; padding: 0; border: 0; background: none; color: inherit; font-family: inherit; line-height: 1.3; text-align: start; cursor: pointer; }
+button.greeting:focus-visible { outline: 3px solid #FFFFFF; outline-offset: 4px; }
 .hdr-title { margin-top: auto; font-size: 1.5rem; font-weight: 600; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4); }
 .save-pill { font-size: 0.75rem; padding: 3px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.85); color: #102746; }
 .save-pill.error { background: #F7E0E1; color: #7B1C22; }

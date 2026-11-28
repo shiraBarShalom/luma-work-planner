@@ -13,7 +13,7 @@ import { parseBackup } from './data/backup.js';
 import { applyTheme, registerServiceWorker, requestPersistence } from './platform.js';
 import { scheduleReminders } from './notifications.js';
 import { loadUi } from './uiPrefs.js';
-import { quickAdd, openTaskEditor } from './editors.js';
+import { quickAdd, openTaskEditor, openNameEditor } from './editors.js';
 import { downloadBlob } from './export/share.js';
 import * as today_ from './views/today.js';
 import * as agenda from './views/agenda.js';
@@ -76,7 +76,7 @@ function renderHeader(route, ctx) {
   headerEl.dataset.banner = hd.image;
   headerEl.replaceChildren(img, h('div.hdr-in',
     h('div.hdr-top', h('div.row', back, brand), actions),
-    isHome ? h('p.greeting', { 'aria-live': 'polite' }, hd.greeting) : h('h1.hdr-title', ROUTES[route.name].title)));
+    isHome ? h('button.greeting', { type: 'button', 'aria-label': `${hd.greeting}. שינוי השם בברכה`, onclick: () => openNameEditor() }, hd.greeting) : h('h1.hdr-title', ROUTES[route.name].title)));
   scheduleHeaderBoundary();
 }
 
