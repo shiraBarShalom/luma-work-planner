@@ -30,7 +30,7 @@ This document describes protections and how they are checked. Tests show that kn
 
 | # | Finding | Severity | Status |
 |---|---|---|---|
-| 1 | Shared origin with the account's other GitHub Pages sites (see above). A future repository named `shiraBarShalom.github.io` would serve the site root and could register a root-scoped service worker. | Medium | **Open; migration approved in principle, awaiting the go-ahead on the plan.** Until then, do not create a `shiraBarShalom.github.io` repository and keep the other sites free of untrusted code. |
+| 1 | Shared origin with the account's other GitHub Pages sites (see above). A future repository named `shiraBarShalom.github.io` would serve the site root and could register a root-scoped service worker. | Medium | **Open; migration to `https://luma-workspace.github.io/` approved and in progress (organization to be created by the owner).** Until then, do not create a `shiraBarShalom.github.io` repository and keep the other sites free of untrusted code. |
 | 2 | Deploy workflow: Actions by movable tags, broad permissions for every job, token left in the workspace. | Medium | Fixed (v2.1.0). |
 | 3 | Task search text stored in localStorage outside the app's data store. | Low | Fixed (v2.1.0); old values deleted on startup. |
 | 4 | CSP allowed inline styles and `blob:` images. | Low | Fixed (v2.1.0). |

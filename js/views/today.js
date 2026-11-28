@@ -7,6 +7,7 @@ import { currentAndNext } from '../engine/schedule.js';
 import { carriedTasks, todaysTasks, upcomingTasks } from '../engine/taskCarryover.js';
 import { countFor, counterTarget } from '../engine/inquiries.js';
 import { checkBox } from './common.js';
+import { celebrateOnce } from '../celebrate.js';
 import { openTaskEditor } from '../editors.js';
 
 function activityCard(state, date, minute) {
@@ -40,20 +41,23 @@ function counterCard(state, date) {
     h('div.counter-row',
       Object.assign(iconBtn('minus', 'הפחתת פנייה', () => run('changeCount', { date, delta: -1 }), 'round'), { disabled: count === 0 }),
       h('div.counter-value', { role: 'status', 'aria-live': 'polite' }, ring(count, target)),
-      iconBtn('plus', 'הוספת פנייה', () => run('changeCount', { date, delta: 1 }), 'round primary')));
+      iconBtn('plus', 'הוספת פנייה', async () => {
+        const before = countFor(S(), date);
+        if (!(await run('changeCount', { date, delta: 1 }))) return;
+        if (target > 0 && before < target && countFor(S(), date) >= target) celebrateOnce(date);
+      }, 'round primary')));
 }
 
 function prioritiesSection(state, date) {
   const ids = state.dailyPriorities[date] || [];
-  const tasks = ids.map((id) => state.tasks.find((t) => t.id === id)).filter(Boolean);
-  const rows = tasks.map((t) => {
-    const done = t.status === 'done';
-    return h('div.item' + (done ? '.done' : ''), { dataset: { taskId: t.id } },
-      checkBox(done, done ? `סימון ״${t.title}״ כלא הושלמה` : `סימון ״${t.title}״ כהושלמה`, () => run('toggleTaskDone', { id: t.id }, { success: done ? 'המשימה סומנה כפתוחה' : 'המשימה הושלמה' }), t.id),
-      h('div.body', h('div.title', t.title)),
-      iconBtn('x', `הסרת ״${t.title}״ מהמשימות החשובות`, () => run('setPriorities', { date, ids: ids.filter((x) => x !== t.id) })));
-  });
-  const add = ids.length < 3 ? btn('בחירת משימה', () => pickPriority(S(), date, ids), 'add-row', 'plus') : null;
+  // Only unfinished important tasks are shown; completing one frees its slot (see setTaskStatus).
+  const tasks = ids.map((id) => state.tasks.find((t) => t.id === id)).filter((t) => t && t.status !== 'done' && t.status !== 'canceled');
+  const active = tasks.map((t) => t.id);
+  const rows = tasks.map((t) => h('div.item', { dataset: { taskId: t.id } },
+    checkBox(false, `סימון ״${t.title}״ כהושלמה`, () => run('setTaskStatus', { id: t.id, status: 'done' }, { success: 'המשימה הושלמה' }), t.id),
+    h('div.body', h('div.title', t.title)),
+    iconBtn('x', `הסרת ״${t.title}״ מהמשימות החשובות`, () => run('setPriorities', { date, ids: active.filter((x) => x !== t.id) }))));
+  const add = tasks.length < 3 ? btn('בחירת משימה', () => pickPriority(S(), date, active), 'add-row', 'plus') : null;
   return section('3 המשימות החשובות שלי להיום', { attrs: { 'data-section': 'priorities' } },
     rows.length ? h('div.list', rows) : null, add);
 }

@@ -60,7 +60,7 @@ Fixed primary navigation (RTL): היום שלי, סדר היום, משימות, 
 
 | Screen | Content (only) |
 |---|---|
-| Home / היום שלי | Weekday and date once; current activity (what, time, remaining, next; several if overlapping; a short neutral line when nothing is scheduled); inquiry counter (circular indicator with `count/target`, +, −, reset with undo); `3 המשימות החשובות שלי להיום` (up to three references to real tasks, completable). |
+| Home / היום שלי | Weekday and date once; current activity (what, time, remaining, next; several if overlapping; a short neutral line when nothing is scheduled); inquiry counter (circular indicator with `count/target`, +, −, reset with undo; a short confetti burst when + reaches the target, once per day); `3 המשימות החשובות שלי להיום` (up to three references to real unfinished tasks, completable; a completed one disappears from Home). |
 | Agenda / סדר היום | One date navigation (arrows; tap the date to pick another); modes רשימה / ציר שעות over the same data; one notes field for the day shared by both modes. Timeline: hourly grid, tap to edit, drag/long-press to move, handle to resize, Alt+arrows on a keyboard, `הוספת פעילות`. List: activity cards (start-end, title, short note, completion checkbox, ⋯ menu with exactly הושלם חלקית, דילוג, ביטול הפעילות, עריכה); every current activity is highlighted with `עכשיו`. Horizontal swipe changes the date. |
 | Tasks / משימות | Two tabs היום / הושלמו and a ⋯ menu with: all tasks this week, tomorrow, לא הסתיימו, עתידיות, ממתינות לתשובה, נדחו, בוטלו. Today has two separate sections: `משימות שלא הסתיימו עד היום` and `משימות להיום`. Search (title and note) and priority sort (high→low / low→high). A `הוספת משימה` button at the end of the screen opens the task editor (the header + stays). |
 | Calendar / יומן | חודש (month/year navigation, the grid; tapping a day opens it), שבוע (week navigation and the weekly grid), יום (day navigation, grid, `הוספת פעילות`). Nothing else. |
@@ -69,7 +69,11 @@ Fixed primary navigation (RTL): היום שלי, סדר היום, משימות, 
 
 Quick add (+): `הוספת משימה`, `הוספת פעילות` - the same editors used everywhere.
 
-Undo: reversible actions (task completion and deletion, activity completion, skip, cancel and single deletion, counter reset) show a `ביטול` toast. Undo uses the store's bounded undo, which restores the previous document only if nothing changed since, so it never duplicates records or reverts later changes. The greeting name is not part of the code: it comes only from `settings.displayName` in local data (kept by migrations and backups).
+Undo: reversible actions (task completion and deletion, activity completion, skip, cancel and single deletion, counter reset) show a `ביטול` toast. Undo uses the store's bounded undo, which restores the previous document only if nothing changed since, so it never duplicates records or reverts later changes. The greeting name is not part of the code: it comes only from `settings.displayName` in local data (kept by migrations and backups, at most 40 characters). Tapping the greeting opens a one-field sheet to set, change or remove it; there is no icon and no settings section. Each storage context has its own name: on iOS, Safari and the Home Screen app keep separate data.
+
+Target celebration: when + takes the count from below the day's target to the target or above, a ~2 s confetti burst in the Luma palette starts at the ring (non-interactive, `aria-hidden`). It runs at most once per calendar day per device (`celebratedOn` in the UI preferences), never on reopening, exceeding the target, or going down and up again, and never with reduced motion.
+
+Screen stability: `touch-action: manipulation` on the whole page (no double-tap zoom), `overflow-x: clip` (no sideways drift), `overscroll-behavior: none` (no whole-page bounce), and every text field at 16px or larger (no zoom on focus). Pinch zoom stays available for accessibility; the viewport does not set `maximum-scale` or `user-scalable=no`.
 
 ### 3.1 Editors
 
@@ -93,9 +97,9 @@ Carryover is a derived view, never a cloning job:
 
 - An open task (`todo`/`inProgress`, or `deferred` past its resume date) whose scheduled date is earlier than the shown date appears under `משימות שלא הסתיימו עד היום` on the Tasks screen, separate from `משימות להיום`. It keeps its ID, original date, deadline and priority, and keeps appearing on later days until completed, canceled, deferred or set to waiting. It works after the app was closed for several days. Opening the app repeatedly is idempotent.
 - Waiting, deferred-until-later, future, done and canceled tasks never carry. Legacy recurring task rules keep their policy (routine checklists never accrue; actionable rules carry the latest missed occurrence by default) and can be stopped from the task menu.
-- Completing a task anywhere removes it from both open sections everywhere and moves it to הושלמו. The same record is referenced by the three priorities.
+- Completing a task anywhere removes it from both open sections everywhere and moves it to הושלמו, keeping its ID and completion date.
 
-Three priorities: up to three unique task IDs per date (`dailyPriorities`); picking a task without a date schedules it for that day; a new task can be created from the picker.
+Three priorities: up to three unique task IDs per date (`dailyPriorities`); picking a task without a date schedules it for that day; a new task can be created from the picker. Completing or canceling a task removes it from the selections of today and later dates in the same command (earlier dates keep theirs as history), freeing the slot; no replacement is chosen automatically. Undo restores the task and its selection together. Home shows only unfinished selected tasks.
 
 ## 6. Inquiry counter
 

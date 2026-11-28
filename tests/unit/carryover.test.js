@@ -64,7 +64,7 @@ test('completing anywhere removes it from every unfinished view; reopening resto
   const t = store.state.tasks[0];
   assert.equal(t.completedOn, TUE);
   assert.equal(t.scheduledDate, MON, 'completion does not rewrite schedule');
-  assert.deepEqual(store.state.dailyPriorities[TUE], [id], 'priority still references the same ID');
+  assert.equal(store.state.dailyPriorities[TUE], undefined, 'completing frees the important-task slot (same task ID kept)');
   await must(store.dispatch('toggleTaskDone', { id }));
   assert.deepEqual(ids(carriedTasks(store.state, WED)), [id]);
   assert.equal(store.state.tasks.length, 1);

@@ -11,7 +11,7 @@ There is no account, server, cloud database, synchronization, AI API, telemetry 
 
 ## Screens
 
-- **היום שלי** - the date, the current activity (time, remaining time, what's next; all of them if several overlap), the inquiry counter (a ring with count/target, +, −, reset) and `3 המשימות החשובות שלי להיום`.
+- **היום שלי** - the date, the current activity (time, remaining time, what's next; all of them if several overlap), the inquiry counter (a ring with count/target, +, −, reset; a short confetti burst when the daily target is reached) and `3 המשימות החשובות שלי להיום` (unfinished ones only).
 - **סדר היום** - the day as a checklist (רשימה) or an hourly timeline (ציר שעות) over the same data, with one notes field. List cards: time, title, short note, checkbox and a menu (הושלם חלקית, דילוג, ביטול הפעילות, עריכה). Timeline: tap to edit, long-press/drag to move, handle to resize, Alt+arrows on a keyboard.
 - **משימות** - היום (with `משימות שלא הסתיימו עד היום` and `משימות להיום`) and הושלמו, plus a menu for this week, tomorrow, unfinished, upcoming, waiting for an answer, deferred and canceled. Search covers title and note; sort by priority either way. `הוספת משימה` at the bottom adds a task directly.
 - **יומן** - month, week and day.
@@ -19,7 +19,7 @@ There is no account, server, cloud database, synchronization, AI API, telemetry 
 
 Swipe left or right to change the date in the agenda and calendar. Completing, skipping, canceling or deleting shows a short "ביטול" toast to undo.
 
-Header: time-of-day banner, greeting (with a name only if one is stored in your local data), the bell (deadline and backup reminders) and + (add a task or an activity). Both editors are short: a task has description, priority, execution date, optional deadline and note; an activity has title, date, start, end, notes and repeat.
+Header: time-of-day banner, greeting (tap it to set your name; stored only on this device and in backups), the bell (deadline and backup reminders) and + (add a task or an activity). Both editors are short: a task has description, priority, execution date, optional deadline and note; an activity has title, date, start, end, notes and repeat.
 
 ## The weekly schedule
 

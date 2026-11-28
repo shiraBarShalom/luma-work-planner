@@ -3,7 +3,7 @@
 // reads or writes data that belongs to another app served from the same origin.
 
 export const APP_ID = 'luma-work-planner';
-export const APP_VERSION = '2.1.1';
+export const APP_VERSION = '2.2.0';
 
 export const IDB_NAME = 'luma-work-planner';
 export const IDB_VERSION = 1;

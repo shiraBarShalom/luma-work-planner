@@ -225,7 +225,10 @@ export const COMMANDS = {
     label: 'עדכון הגדרות',
     run(d, p) {
       for (const [k, v] of Object.entries(p.patch || {})) {
-        if (k === 'theme') { if (!['auto', 'light', 'dark'].includes(v)) fail('theme', 'ערך לא תקין'); d.settings.theme = v; }
+        if (k === 'displayName') {
+          if (typeof v !== 'string') fail('name', 'שם לא תקין');
+          d.settings.displayName = cleanText(v, 40);
+        } else if (k === 'theme') { if (!['auto', 'light', 'dark'].includes(v)) fail('theme', 'ערך לא תקין'); d.settings.theme = v; }
         else if (k === 'reducedMotion') { if (!['auto', 'reduce'].includes(v)) fail('motion', 'ערך לא תקין'); d.settings.reducedMotion = v; }
         else if (k === 'backup') {
           const b = { ...d.settings.backup, ...v };
@@ -427,6 +430,15 @@ export const COMMANDS = {
         t.assignedBlock = null;
       } else t.resumeOn = null;
       if (status === 'waiting') t.waiting = { note: t.waiting?.note || '', followUpOn: t.waiting?.followUpOn || null };
+      // A finished task frees its "three important tasks" slot from today on (earlier days
+      // keep their selection as history). Undo restores the task and the selection together.
+      if (status === 'done' || status === 'canceled') {
+        for (const [date, ids] of Object.entries(d.dailyPriorities)) {
+          if (date < ctx.today || !ids.includes(t.id)) continue;
+          const rest = ids.filter((x) => x !== t.id);
+          if (rest.length) d.dailyPriorities[date] = rest; else delete d.dailyPriorities[date];
+        }
+      }
       t.updatedAt = ctx.nowIso;
       return t.id;
     },

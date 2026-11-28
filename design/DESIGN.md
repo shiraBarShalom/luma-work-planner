@@ -46,6 +46,10 @@ Bottom navigation (RTL): היום שלי, סדר היום, משימות, יומ�
 - Reversible actions (completing, skipping or canceling an activity, completing or deleting a task or a single activity, resetting the counter) act immediately and show a dark toast above the bottom navigation with one `ביטול` action for about six seconds. Permanent or wide-reaching actions (deleting a recurring series from now on, replacing data from a backup) keep a confirmation.
 - Motion is short and quiet: a 180ms fade for a new screen (a 16px slide in the swipe direction), a 260ms pop when a box is checked, a scale-down to 97% on press. All of it is off with reduced motion.
 - Every control is at least 44x44 CSS px. Agenda and calendar remember the last presentation mode; scroll position is kept after edits.
+- Reaching the daily inquiry target with + shows a small confetti burst from the ring for about two seconds: 26 small pieces in primary, primary-strong, success, warning and primary-soft; no text, no dialog, taps go through. Once per day; none with reduced motion.
+- The greeting is the control for the name: tapping it opens a sheet titled `שם בברכה` with one `שם` field and `שמירה`. No icon or other visible affordance.
+- Home lists only unfinished important tasks; checking one removes it from Home immediately (undo brings it back).
+- The page never zooms on double tap, never drifts sideways and does not bounce as a whole; inner lists and grids scroll normally. Pinch zoom remains for accessibility.
 - The import review shows one summary line (`2 משימות חדשות · פעילות חדשה אחת`), warnings on one line, the items behind `הצגת הפריטים` (opened automatically when something needs an answer), and one `ייבוא` button.
 
 ## 5. Verification

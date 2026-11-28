@@ -141,14 +141,86 @@ await test('three priorities reference real tasks; completing one updates the Ta
   await page.getByRole('button', { name: 'בחירת משימה' }).click();
   await page.locator('.choice', { hasText: 'משימה חשובה' }).click();
   await page.waitForSelector('[data-section="priorities"] .item');
+  const id = (await stateOf(page)).tasks[0].id;
   await page.locator('[data-section="priorities"] .cb').click();
-  await page.waitForSelector('[data-section="priorities"] .item.done');
+  // Completed important task leaves Home at once; the slot is free again; no automatic replacement.
+  await page.waitForFunction(() => !document.querySelector('[data-section="priorities"] .item'));
+  assert.equal(await page.getByRole('button', { name: 'בחירת משימה' }).count(), 1, 'slot reusable');
+  assert.deepEqual((await stateOf(page)).dailyPriorities, {}, 'selection cleared for today, nothing auto-selected');
+  // Undo restores the task and its important-task selection.
+  await page.locator('.toast').getByRole('button', { name: 'ביטול' }).click();
+  await page.waitForSelector('[data-section="priorities"] .item');
+  let st = await stateOf(page);
+  assert.equal(st.tasks[0].status, 'todo'); assert.deepEqual(st.dailyPriorities[MON], [id]);
+  await page.locator('[data-section="priorities"] .cb').click();
+  await page.waitForFunction(() => !document.querySelector('[data-section="priorities"] .item'));
+  st = await stateOf(page);
+  assert.equal(st.tasks[0].id, id, 'same task ID'); assert.equal(st.tasks[0].completedOn, MON);
   await go(page, base, '#/tasks/today', '[data-section="today"]');
   assert.deepEqual(await sectionTitles(page, 'today'), [], 'gone from open sections');
   await go(page, base, '#/tasks/done', '[data-section="done"]');
   assert.deepEqual(await page.locator('[data-section="done"] .title').allTextContents(), ['משימה חשובה']);
   assert.equal((await stateOf(page)).tasks.length, 1, 'one record');
   await ctx.close();
+});
+
+await test('greeting name: tap the greeting, save, persists after reload, can be removed', async () => {
+  const { page, ctx, errors } = await newPage(browser, base);
+  assert.equal(await page.locator('.hdr .greeting svg, .hdr .greeting img').count(), 0, 'no edit icon');
+  await page.locator('.greeting').click();
+  const field = page.getByRole('dialog').getByLabel('שם');
+  await field.fill('  נועה  ');
+  await page.getByRole('dialog').getByRole('button', { name: 'שמירה' }).click();
+  await page.waitForFunction(() => document.querySelector('.greeting')?.textContent === 'בוקר טוב, נועה');
+  assert.equal((await stateOf(page)).settings.displayName, 'נועה', 'stored trimmed, in the local state document');
+  await page.reload(); await page.waitForSelector('.greeting');
+  assert.equal(await page.locator('.greeting').textContent(), 'בוקר טוב, נועה', 'persists');
+  await page.locator('.greeting').click();
+  await page.getByRole('dialog').getByLabel('שם').fill('');
+  await page.getByRole('dialog').getByLabel('שם').press('Enter');
+  await page.waitForFunction(() => document.querySelector('.greeting')?.textContent === 'בוקר טוב');
+  const keys = await page.evaluate(() => Object.keys(localStorage).map((k) => localStorage.getItem(k)).join(' '));
+  assert.doesNotMatch(keys, /נועה/, 'name never written to localStorage');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await test('confetti once when the counter reaches the target; not on exceeding, down-and-up or reopening', async () => {
+  const { page, ctx } = await newPage(browser, base);
+  await dispatch(page, 'setDefaultTarget', { target: 3 });
+  const plus = page.getByRole('button', { name: 'הוספת פנייה' });
+  const minus = page.getByRole('button', { name: 'הפחתת פנייה' });
+  const at = (n) => page.waitForFunction((n) => document.querySelector('.ring-val')?.textContent.startsWith(`${n}/`), n);
+  await plus.click(); await at(1); await plus.click(); await at(2);
+  assert.equal(await page.locator('.confetti').count(), 0, 'nothing below the target');
+  await plus.click(); await at(3);
+  await page.waitForSelector('.confetti span');
+  assert.equal(await page.locator('.confetti').getAttribute('aria-hidden'), 'true');
+  assert.equal(await page.locator('.confetti').evaluate((e) => getComputedStyle(e).pointerEvents), 'none', 'does not block taps');
+  await plus.click(); await at(4); // interaction continues during the burst
+  await page.clock.runFor(2500);
+  await page.waitForFunction(() => !document.querySelector('.confetti'));
+  await minus.click(); await at(3); await minus.click(); await at(2); await plus.click(); await at(3);
+  await page.waitForTimeout(150);
+  assert.equal(await page.locator('.confetti').count(), 0, 'not again after down and up');
+  await page.reload(); await page.waitForSelector('.ring-val');
+  await page.waitForTimeout(150);
+  assert.equal(await page.locator('.confetti').count(), 0, 'not on reopening');
+  // Next day: a new celebration is allowed.
+  await page.clock.setSystemTime(jlm('2026-12-01', '10:00'));
+  await page.reload(); await page.waitForSelector('.ring-val');
+  for (let i = 1; i <= 3; i++) { await plus.click(); await at(i); }
+  await page.waitForSelector('.confetti span');
+  await ctx.close();
+  // Reduced motion: never animates.
+  const rm = await newPage(browser, base);
+  await rm.page.emulateMedia({ reducedMotion: 'reduce' });
+  await dispatch(rm.page, 'setDefaultTarget', { target: 1 });
+  await rm.page.getByRole('button', { name: 'הוספת פנייה' }).click();
+  await rm.page.waitForFunction(() => document.querySelector('.ring-val')?.textContent.startsWith('1/'));
+  await rm.page.waitForTimeout(150);
+  assert.equal(await rm.page.locator('.confetti').count(), 0, 'reduced motion: no confetti');
+  await rm.ctx.close();
 });
 
 await test('carryover: unchecked Monday task appears Tuesday under "לא הסתיימו" on Tasks (not Home), no clone, weekend skipped', async () => {
@@ -805,6 +877,17 @@ await test('viewport allows pinch zoom (no maximum-scale / user-scalable=no)', a
   const vp = /<meta name="viewport" content="([^"]+)"/.exec(html)[1];
   assert.doesNotMatch(vp, /user-scalable\s*=\s*no|maximum-scale/);
   assert.match(vp, /viewport-fit=cover/);
+  // Stability without blocking accessibility zoom: no double-tap zoom, no sideways drift,
+  // no whole-page bounce; text fields use 16px text so iOS does not zoom on focus.
+  const { page, ctx } = await newPage(browser, base);
+  const root = await page.evaluate(() => ['html', 'body'].map((s) => { const c = getComputedStyle(document.querySelector(s)); return [c.touchAction, c.overflowX, c.overscrollBehaviorY]; }));
+  for (const [ta, ox, ob] of root) { assert.equal(ta, 'manipulation'); assert.equal(ox, 'clip'); assert.equal(ob, 'none'); }
+  for (const r of ['#/home', `#/agenda/${MON}`, '#/tasks/today', '#/settings', '#/import']) {
+    await go(page, base, r);
+    const small = await page.evaluate(() => [...document.querySelectorAll('input, textarea, select')].filter((e) => e.offsetParent && parseFloat(getComputedStyle(e).fontSize) < 16).map((e) => e.outerHTML.slice(0, 60)));
+    assert.deepEqual(small, [], `${r}: field text under 16px zooms on focus in iOS`);
+  }
+  await ctx.close();
 });
 
 let wk = null;

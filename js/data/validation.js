@@ -65,6 +65,7 @@ export function validateState(s) {
     if (!isObj(st.backup) || !isInt(st.backup.reminderDays, 0, 365)) err('settings.backup', 'invalid');
     if (st.notifications != null && (!isObj(st.notifications) || typeof st.notifications.activityStart !== 'boolean' || typeof st.notifications.showDetails !== 'boolean')) err('settings.notifications', 'invalid');
     if (!optDate(st.routineEndsOn)) err('settings.routineEndsOn', 'invalid');
+    if (st.displayName != null && !isStr(st.displayName, 40)) err('settings.displayName', 'invalid');
     const hr = headerRuleErrors(st.header?.rules);
     if (hr.length) err('settings.header', hr.join(', '));
     if (!s.dayTemplates.some?.((t) => t.id === st.defaultTemplateId)) err('settings.defaultTemplateId', 'unknown template');
